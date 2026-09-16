@@ -8,11 +8,8 @@ class IngredientService:
     def __init__(self, repository: IngredientRepository):
         self.repository = repository
 
-    async def create_ingredient(
-        self,
-        data: IngredientCreate,
-    ):
-        return await self.repository.create(
+    async def create_ingredient(self, data: IngredientCreate):
+        ingredient = await self.repository.create(
             restaurant_id=data.restaurant_id,
             name=data.name,
             unit=data.unit,
@@ -21,10 +18,11 @@ class IngredientService:
             cost_per_unit=data.cost_per_unit,
         )
 
-    async def list_ingredients(
-        self,
-        restaurant_id: UUID,
-    ):
+        await self.repository.db.commit()
+        await self.repository.db.refresh(ingredient)
+        return ingredient
+
+    async def list_ingredients(self, restaurant_id: UUID):
         return await self.repository.get_all(
             restaurant_id=restaurant_id,
         )
@@ -45,7 +43,7 @@ class IngredientService:
         ingredient_id: UUID,
         data: IngredientUpdate,
     ):
-        return await self.repository.update(
+        ingredient = await self.repository.update(
             restaurant_id=restaurant_id,
             ingredient_id=ingredient_id,
             name=data.name,
@@ -55,12 +53,24 @@ class IngredientService:
             cost_per_unit=data.cost_per_unit,
         )
 
+        if ingredient is None:
+            return None
+
+        await self.repository.db.commit()
+        await self.repository.db.refresh(ingredient)
+        return ingredient
+
     async def delete_ingredient(
         self,
         restaurant_id: UUID,
         ingredient_id: UUID,
     ):
-        return await self.repository.delete(
+        deleted = await self.repository.delete(
             restaurant_id=restaurant_id,
             ingredient_id=ingredient_id,
         )
+
+        if deleted:
+            await self.repository.db.commit()
+
+        return deleted

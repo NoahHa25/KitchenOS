@@ -29,8 +29,7 @@ class IngredientRepository:
         )
 
         self.db.add(ingredient)
-        await self.db.commit()
-        await self.db.refresh(ingredient)
+        await self.db.flush()
 
         return ingredient
 
@@ -93,8 +92,7 @@ class IngredientRepository:
         if cost_per_unit is not None:
             ingredient.cost_per_unit = cost_per_unit
 
-        await self.db.commit()
-        await self.db.refresh(ingredient)
+        await self.db.flush()
 
         return ingredient
 
@@ -112,6 +110,6 @@ class IngredientRepository:
             return False
 
         await self.db.delete(ingredient)
-        await self.db.commit()
+        await self.db.flush()
 
         return True

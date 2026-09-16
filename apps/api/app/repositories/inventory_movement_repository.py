@@ -25,8 +25,7 @@ class InventoryMovementRepository:
         )
 
         self.db.add(movement)
-        await self.db.commit()
-        await self.db.refresh(movement)
+        await self.db.flush()
 
         return movement
 

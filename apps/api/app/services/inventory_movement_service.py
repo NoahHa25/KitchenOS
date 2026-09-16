@@ -73,17 +73,23 @@ class InventoryMovementService:
         elif movement_type == "adjustment":
             ingredient.current_stock = quantity
 
-        movement = await self.movement_repository.create(
-            ingredient_id=data.ingredient_id,
-            movement_type=movement_type,
-            quantity=float(quantity),
-            reason=data.reason,
-        )
+        try:
+            movement = await self.movement_repository.create(
+                ingredient_id=data.ingredient_id,
+                movement_type=movement_type,
+                quantity=float(quantity),
+                reason=data.reason,
+            )
 
-        await self.ingredient_repository.db.commit()
-        await self.ingredient_repository.db.refresh(ingredient)
+            await self.ingredient_repository.db.commit()
+            await self.ingredient_repository.db.refresh(ingredient)
+            await self.ingredient_repository.db.refresh(movement)
 
-        return movement
+            return movement
+
+        except Exception:
+            await self.ingredient_repository.db.rollback()
+            raise
 
     async def list_movements(
         self,
