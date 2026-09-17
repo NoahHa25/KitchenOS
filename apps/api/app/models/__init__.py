@@ -4,6 +4,8 @@ from app.models.ingredient import Ingredient
 from app.models.inventory_movement import InventoryMovement
 from app.models.recipe import Recipe
 from app.models.recipe_ingredient import RecipeIngredient
+from app.models.order import Order
+from app.models.order_item import OrderItem
 
 __all__ = [
     "Base",
@@ -12,4 +14,6 @@ __all__ = [
     "InventoryMovement",
     "Recipe",
     "RecipeIngredient",
+    "Order",
+    "OrderItem",
 ]
