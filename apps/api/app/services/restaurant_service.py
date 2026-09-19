@@ -1,6 +1,9 @@
 from app.repositories.restaurant_repository import RestaurantRepository
 from app.schemas.restaurant import RestaurantCreate, RestaurantUpdate
-
+from app.models.restaurant import Restaurant
+from app.repositories.ingredient_repository import IngredientRepository
+from app.repositories.recipe_ingredient_repository import RecipeIngredientRepository
+from app.services.ingredient_service import IngredientService
 
 class RestaurantService:
     def __init__(self, repository: RestaurantRepository):

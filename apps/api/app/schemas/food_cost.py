@@ -2,17 +2,14 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-
-class FoodCostBreakdown(BaseModel):
+class FoodCostBreakdownItem(BaseModel):
     ingredient: str
     quantity: float
-    unit: str
     cost_per_unit: float
-    cost: float
-
+    total_cost: float
 
 class FoodCostResponse(BaseModel):
     recipe_id: UUID
     recipe_name: str
     food_cost: float
-    breakdown: list[FoodCostBreakdown]
+    breakdown: list[FoodCostBreakdownItem]
