@@ -46,84 +46,88 @@ class OrderService:
     ):
         inventory_service = InventoryConsumptionService(
             ingredient_repository=self.ingredient_repository,
-            recipe_ingredient_repository=self.recipe_ingredient_repository,
+            recipe_ingredient_repository=(
+                self.recipe_ingredient_repository
+            ),
+            inventory_movement_repository=(
+                self.inventory_movement_repository
+            ),
         )
 
-        total_amount = Decimal("0.00")
-        all_required: list[dict] = []
+        try:
+            total_amount = Decimal("0.00")
+            all_required: list[dict] = []
 
-        # Phase 1: Validate recipes and calculate requirements
-        for item in data.items:
-            recipe = await self.recipe_repository.get_by_id(
-                restaurant_id=data.restaurant_id,
-                recipe_id=item.recipe_id,
-            )
-
-            if recipe is None:
-                return None
-
-            total_amount += item.quantity * item.unit_price
-
-            required = (
-                await inventory_service.calculate_required_ingredients(
+            # Phase 1: Validate recipes and calculate requirements
+            for item in data.items:
+                recipe = await self.recipe_repository.get_by_id(
                     restaurant_id=data.restaurant_id,
                     recipe_id=item.recipe_id,
-                    recipe_quantity=item.quantity,
+                )
+
+                if recipe is None:
+                    return None
+
+                total_amount += (
+                    item.quantity * item.unit_price
+                )
+
+                required = (
+                    await inventory_service.calculate_required_ingredients(
+                        restaurant_id=data.restaurant_id,
+                        recipe_id=item.recipe_id,
+                        recipe_quantity=item.quantity,
+                    )
+                )
+
+                all_required.extend(required)
+
+            # Phase 2: Aggregate requirements for duplicate ingredients
+            all_required = (
+                inventory_service.aggregate_required_ingredients(
+                    all_required
                 )
             )
 
-            all_required.extend(required)
-
-        # Phase 2: Validate stock
-        await inventory_service.validate_stock(
-            all_required,
-        )
-
-        # Phase 3: Create order
-        order = await self.order_repository.create(
-            restaurant_id=data.restaurant_id,
-            status="pending",
-            total_amount=total_amount,
-        )
-
-        # Phase 4: Create order items
-        for item in data.items:
-            await self.order_item_repository.create(
-                order_id=order.id,
-                recipe_id=item.recipe_id,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
+            # Phase 3: Validate total required stock
+            await inventory_service.validate_stock(
+                all_required,
             )
 
-        # Phase 5: Consume inventory
-        for item in all_required:
-            ingredient = item["ingredient"]
-            required_quantity = item["required_quantity"]
-
-            await self.ingredient_repository.update(
+            # Phase 4: Create the order
+            order = await self.order_repository.create(
                 restaurant_id=data.restaurant_id,
-                ingredient_id=ingredient.id,
-                current_stock=(
-                    ingredient.current_stock
-                    - required_quantity
-                ),
+                status="pending",
+                total_amount=total_amount,
             )
 
-            await self.inventory_movement_repository.create(
-                ingredient_id=ingredient.id,
-                movement_type="out",
-                quantity=required_quantity,
-                reason=f"Order {order.id}",
+            # Phase 5: Create order items
+            for item in data.items:
+                await self.order_item_repository.create(
+                    order_id=order.id,
+                    recipe_id=item.recipe_id,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                )
+
+            # Phase 6: Consume inventory and record movements
+            await inventory_service.consume_stock(
+                required=all_required,
+                order_id=order.id,
             )
 
-        # Phase 6: Commit everything
-        await self.order_repository.db.commit()
+            # Phase 7: Commit order + items + inventory atomically
+            await self.order_repository.db.commit()
 
-        # Reload order with items
-        return await self.order_repository.get_by_id(
-            restaurant_id=data.restaurant_id,
-            order_id=order.id,
-        )
+            # Reload order with items
+            return await self.order_repository.get_by_id(
+                restaurant_id=data.restaurant_id,
+                order_id=order.id,
+            )
+
+        except Exception:
+            await self.order_repository.db.rollback()
+            raise
 
     async def update_status(
         self,
@@ -169,3 +173,4 @@ class OrderService:
             order=order,
             status=new_status,
         )
+
