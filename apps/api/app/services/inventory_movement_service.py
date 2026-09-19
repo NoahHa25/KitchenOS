@@ -24,56 +24,58 @@ class InventoryMovementService:
         restaurant_id: UUID,
         data: InventoryMovementCreate,
     ):
-        ingredient = await self.ingredient_repository.get_by_id(
-            restaurant_id=restaurant_id,
-            ingredient_id=data.ingredient_id,
-        )
-
-        if ingredient is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Ingredient not found",
+        try:
+            ingredient = await self.ingredient_repository.get_by_id(
+                restaurant_id=restaurant_id,
+                ingredient_id=data.ingredient_id,
             )
 
-        movement_type = data.movement_type.lower()
-        quantity = Decimal(str(data.quantity))
-
-        if movement_type not in {
-            "purchase",
-            "usage",
-            "waste",
-            "adjustment",
-        }:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Invalid movement type. "
-                    "Use purchase, usage, waste, or adjustment."
-                ),
-            )
-
-        if quantity <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Quantity must be greater than 0",
-            )
-
-        if movement_type == "purchase":
-            ingredient.current_stock += quantity
-
-        elif movement_type in {"usage", "waste"}:
-            if ingredient.current_stock < quantity:
+            if ingredient is None:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Insufficient stock",
+                    status_code=404,
+                    detail="Ingredient not found",
                 )
 
-            ingredient.current_stock -= quantity
+            movement_type = data.movement_type.lower().strip()
+            quantity = Decimal(str(data.quantity))
 
-        elif movement_type == "adjustment":
-            ingredient.current_stock = quantity
+            if movement_type not in {
+                "purchase",
+                "usage",
+                "waste",
+                "adjustment",
+            }:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Invalid movement type. "
+                        "Use purchase, usage, waste, or adjustment."
+                    ),
+                )
 
-        try:
+            if quantity <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Quantity must be greater than 0",
+                )
+
+            current_stock = Decimal(str(ingredient.current_stock))
+
+            if movement_type == "purchase":
+                ingredient.current_stock = current_stock + quantity
+
+            elif movement_type in {"usage", "waste"}:
+                if current_stock < quantity:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Insufficient stock",
+                    )
+
+                ingredient.current_stock = current_stock - quantity
+
+            elif movement_type == "adjustment":
+                ingredient.current_stock = quantity
+
             movement = await self.movement_repository.create(
                 ingredient_id=data.ingredient_id,
                 movement_type=movement_type,
@@ -82,6 +84,7 @@ class InventoryMovementService:
             )
 
             await self.ingredient_repository.db.commit()
+
             await self.ingredient_repository.db.refresh(ingredient)
             await self.ingredient_repository.db.refresh(movement)
 
