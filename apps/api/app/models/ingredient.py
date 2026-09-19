@@ -27,15 +27,15 @@ class Ingredient(Base):
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
 
     current_stock: Mapped[float] = mapped_column(
-        Numeric(10, 2),
-        default=0,
-        nullable=False,
+         Numeric(10, 3),
+         default=0,
+         nullable=False,
     )
 
     minimum_stock: Mapped[float] = mapped_column(
-        Numeric(10, 2),
-        default=0,
-        nullable=False,
+         Numeric(10, 3),
+         default=0,
+         nullable=False,
     )
 
     cost_per_unit: Mapped[float] = mapped_column(

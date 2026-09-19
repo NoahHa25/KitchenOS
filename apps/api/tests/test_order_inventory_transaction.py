@@ -12,15 +12,31 @@ from app.models.order_item import OrderItem
 from app.models.recipe import Recipe
 from app.models.recipe_ingredient import RecipeIngredient
 from app.models.restaurant import Restaurant
-from app.repositories.ingredient_repository import IngredientRepository
-from app.repositories.order_item_repository import OrderItemRepository
-from app.repositories.order_repository import OrderRepository
+from app.repositories.ingredient_repository import (
+    IngredientRepository,
+)
+from app.repositories.inventory_movement_repository import (
+    InventoryMovementRepository,
+)
+from app.repositories.order_item_repository import (
+    OrderItemRepository,
+)
+from app.repositories.order_repository import (
+    OrderRepository,
+)
 from app.repositories.recipe_ingredient_repository import (
     RecipeIngredientRepository,
 )
-from app.repositories.recipe_repository import RecipeRepository
+from app.repositories.recipe_repository import (
+    RecipeRepository,
+)
 from app.schemas.order import OrderCreate, OrderItemCreate
 from app.services.order_service import OrderService
+
+
+# ---------------------------------------------------------------------------
+# Failing repository
+# ---------------------------------------------------------------------------
 
 
 class FailingInventoryMovementRepository:
@@ -29,9 +45,17 @@ class FailingInventoryMovementRepository:
         ingredient_id,
         movement_type,
         quantity,
+        unit_cost=None,
         reason=None,
     ):
-        raise RuntimeError("Forced inventory movement failure")
+        raise RuntimeError(
+            "Forced inventory movement failure"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Transaction rollback integration test
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -54,6 +78,7 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
         )
 
         setup_db.add(restaurant)
+
         await setup_db.commit()
 
     async with AsyncSessionLocal() as setup_db:
@@ -91,6 +116,7 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
         )
 
         setup_db.add(recipe_ingredient)
+
         await setup_db.commit()
 
     try:
@@ -126,7 +152,9 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
 
             with pytest.raises(
                 RuntimeError,
-                match="Forced inventory movement failure",
+                match=(
+                    "Forced inventory movement failure"
+                ),
             ):
                 await service.create_order(data)
 
@@ -137,30 +165,46 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
 
         async with AsyncSessionLocal() as verify_db:
             ingredient_result = await verify_db.execute(
-                select(Ingredient.current_stock).where(
+                select(
+                    Ingredient.current_stock
+                ).where(
                     Ingredient.id == ingredient_id,
-                    Ingredient.restaurant_id == restaurant_id,
+                    Ingredient.restaurant_id
+                    == restaurant_id,
                 )
             )
 
             stock = ingredient_result.scalar_one()
 
-            order_count_result = await verify_db.execute(
-                select(func.count(Order.id)).where(
-                    Order.restaurant_id == restaurant_id,
+            order_count_result = (
+                await verify_db.execute(
+                    select(
+                        func.count(Order.id)
+                    ).where(
+                        Order.restaurant_id
+                        == restaurant_id,
+                    )
                 )
             )
 
-            order_count = order_count_result.scalar_one()
+            order_count = (
+                order_count_result.scalar_one()
+            )
 
-            order_item_count_result = await verify_db.execute(
-                select(func.count(OrderItem.id))
-                .join(
-                    Order,
-                    Order.id == OrderItem.order_id,
-                )
-                .where(
-                    Order.restaurant_id == restaurant_id,
+            order_item_count_result = (
+                await verify_db.execute(
+                    select(
+                        func.count(OrderItem.id)
+                    )
+                    .join(
+                        Order,
+                        Order.id
+                        == OrderItem.order_id,
+                    )
+                    .where(
+                        Order.restaurant_id
+                        == restaurant_id,
+                    )
                 )
             )
 
@@ -168,14 +212,22 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
                 order_item_count_result.scalar_one()
             )
 
-            movement_count_result = await verify_db.execute(
-                select(func.count(InventoryMovement.id))
-                .join(
-                    Ingredient,
-                    Ingredient.id == InventoryMovement.ingredient_id,
-                )
-                .where(
-                    Ingredient.restaurant_id == restaurant_id,
+            movement_count_result = (
+                await verify_db.execute(
+                    select(
+                        func.count(
+                            InventoryMovement.id
+                        )
+                    )
+                    .join(
+                        Ingredient,
+                        Ingredient.id
+                        == InventoryMovement.ingredient_id,
+                    )
+                    .where(
+                        Ingredient.restaurant_id
+                        == restaurant_id,
+                    )
                 )
             )
 
@@ -198,7 +250,8 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
                 delete(OrderItem).where(
                     OrderItem.order_id.in_(
                         select(Order.id).where(
-                            Order.restaurant_id == restaurant_id,
+                            Order.restaurant_id
+                            == restaurant_id,
                         )
                     )
                 )
@@ -206,19 +259,22 @@ async def test_order_inventory_transaction_rolls_back_on_failure():
 
             await cleanup_db.execute(
                 delete(Order).where(
-                    Order.restaurant_id == restaurant_id,
+                    Order.restaurant_id
+                    == restaurant_id,
                 )
             )
 
             await cleanup_db.execute(
                 delete(InventoryMovement).where(
-                    InventoryMovement.ingredient_id == ingredient_id,
+                    InventoryMovement.ingredient_id
+                    == ingredient_id,
                 )
             )
 
             await cleanup_db.execute(
                 delete(RecipeIngredient).where(
-                    RecipeIngredient.recipe_id == recipe_id,
+                    RecipeIngredient.recipe_id
+                    == recipe_id,
                 )
             )
 

@@ -4,91 +4,193 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
-from app.schemas.inventory_movement import InventoryMovementCreate
+from app.schemas.inventory_movement import (
+    InventoryMovementCreate,
+)
 from app.services.inventory_movement_service import (
     InventoryMovementService,
 )
 
 
-class FakeDB:
+# ---------------------------------------------------------------------------
+# Fake database
+# ---------------------------------------------------------------------------
+
+
+class FakeDatabase:
     def __init__(self):
-        self.committed = False
-        self.rolled_back = False
+        self.commit_called = False
+        self.rollback_called = False
 
     async def commit(self):
-        self.committed = True
+        self.commit_called = True
 
     async def rollback(self):
-        self.rolled_back = True
+        self.rollback_called = True
 
     async def refresh(self, obj):
-        return None
+        return obj
+
+
+# ---------------------------------------------------------------------------
+# Fake repositories
+# ---------------------------------------------------------------------------
 
 
 class FakeIngredientRepository:
-    def __init__(self, ingredient=None, db=None):
+    def __init__(
+        self,
+        ingredient=None,
+        db=None,
+    ):
         self.ingredient = ingredient
-        self.db = db or FakeDB()
+        self.db = db or FakeDatabase()
 
-    async def get_by_id(self, restaurant_id, ingredient_id):
+    async def get_by_id(
+        self,
+        restaurant_id,
+        ingredient_id,
+    ):
+        if self.ingredient is None:
+            return None
+
+        if self.ingredient.id != ingredient_id:
+            return None
+
+        if self.ingredient.restaurant_id != restaurant_id:
+            return None
+
         return self.ingredient
 
 
 class FakeMovementRepository:
-    def __init__(self, should_fail=False):
-        self.should_fail = should_fail
-        self.created = None
+    def __init__(
+        self,
+        movement_should_fail=False,
+    ):
+        self.movements = []
+        self.movement_should_fail = movement_should_fail
 
     async def create(
         self,
         ingredient_id,
         movement_type,
         quantity,
+        unit_cost,
         reason=None,
     ):
-        if self.should_fail:
+        if self.movement_should_fail:
             raise RuntimeError("Database error")
 
-        self.created = SimpleNamespace(
+        movement = SimpleNamespace(
             id=uuid4(),
             ingredient_id=ingredient_id,
             movement_type=movement_type,
             quantity=quantity,
+            unit_cost=unit_cost,
             reason=reason,
         )
 
-        return self.created
+        self.movements.append(movement)
+
+        return movement
 
 
-def make_ingredient(stock="10.00"):
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def make_ingredient(
+    current_stock="10.00",
+    cost_per_unit="2.50",
+):
     return SimpleNamespace(
         id=uuid4(),
-        current_stock=Decimal(stock),
+        restaurant_id=uuid4(),
+        name="Flour",
+        unit="kg",
+        current_stock=Decimal(current_stock),
+        minimum_stock=Decimal("1.00"),
+        cost_per_unit=Decimal(cost_per_unit),
     )
 
 
 def make_service(
-    ingredient,
+    ingredient=None,
+    ingredient_not_found=False,
     movement_should_fail=False,
 ):
-    db = FakeDB()
+    db = FakeDatabase()
 
-    ingredient_repository = FakeIngredientRepository(
-        ingredient=ingredient,
-        db=db,
-    )
+    if ingredient_not_found:
+        ingredient_repository = FakeIngredientRepository(
+            ingredient=None,
+            db=db,
+        )
+    else:
+        ingredient_repository = FakeIngredientRepository(
+            ingredient=ingredient,
+            db=db,
+        )
 
     movement_repository = FakeMovementRepository(
-        should_fail=movement_should_fail,
+        movement_should_fail=movement_should_fail,
     )
 
     service = InventoryMovementService(
-        movement_repository=movement_repository,
         ingredient_repository=ingredient_repository,
+        movement_repository=movement_repository,
     )
 
-    return service, db, movement_repository
+    return (
+        service,
+        db,
+        movement_repository,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ingredient not found
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_ingredient_not_found():
+    ingredient_id = uuid4()
+    restaurant_id = uuid4()
+
+    service, db, movement_repository = make_service(
+        ingredient_not_found=True,
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient_id,
+        movement_type="purchase",
+        quantity=5,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.create_movement(
+            restaurant_id=restaurant_id,
+            data=data,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert (
+        exc_info.value.detail
+        == "Ingredient not found"
+    )
+
+    assert movement_repository.movements == []
+    assert db.rollback_called is True
+
+
+# ---------------------------------------------------------------------------
+# Purchase
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -103,18 +205,31 @@ async def test_purchase_increases_stock():
         ingredient_id=ingredient.id,
         movement_type="purchase",
         quantity=5,
-        reason="Supplier delivery",
     )
 
     await service.create_movement(
-        restaurant_id=uuid4(),
+        restaurant_id=ingredient.restaurant_id,
         data=data,
     )
 
     assert ingredient.current_stock == Decimal("15.00")
-    assert movement_repository.created.movement_type == "purchase"
-    assert movement_repository.created.quantity == 5.0
-    assert db.committed is True
+
+    assert len(movement_repository.movements) == 1
+
+    movement = movement_repository.movements[0]
+
+    assert movement.ingredient_id == ingredient.id
+    assert movement.movement_type == "purchase"
+    assert movement.quantity == Decimal("5")
+    assert movement.unit_cost == Decimal("2.50")
+    assert movement.reason is None
+
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -133,13 +248,25 @@ async def test_usage_decreases_stock():
     )
 
     await service.create_movement(
-        restaurant_id=uuid4(),
+        restaurant_id=ingredient.restaurant_id,
         data=data,
     )
 
     assert ingredient.current_stock == Decimal("7.00")
-    assert movement_repository.created.movement_type == "usage"
-    assert db.committed is True
+
+    movement = movement_repository.movements[0]
+
+    assert movement.movement_type == "usage"
+    assert movement.quantity == Decimal("3")
+    assert movement.unit_cost == Decimal("2.50")
+    assert movement.reason == "Kitchen usage"
+
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Waste
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -158,13 +285,25 @@ async def test_waste_decreases_stock():
     )
 
     await service.create_movement(
-        restaurant_id=uuid4(),
+        restaurant_id=ingredient.restaurant_id,
         data=data,
     )
 
     assert ingredient.current_stock == Decimal("8.00")
-    assert movement_repository.created.movement_type == "waste"
-    assert db.committed is True
+
+    movement = movement_repository.movements[0]
+
+    assert movement.movement_type == "waste"
+    assert movement.quantity == Decimal("2")
+    assert movement.unit_cost == Decimal("2.50")
+    assert movement.reason == "Spoiled ingredient"
+
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Adjustment
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -183,13 +322,66 @@ async def test_adjustment_sets_stock():
     )
 
     await service.create_movement(
-        restaurant_id=uuid4(),
+        restaurant_id=ingredient.restaurant_id,
         data=data,
     )
 
     assert ingredient.current_stock == Decimal("25.00")
-    assert movement_repository.created.movement_type == "adjustment"
-    assert db.committed is True
+
+    movement = movement_repository.movements[0]
+
+    assert movement.movement_type == "adjustment"
+    assert movement.quantity == Decimal("25")
+    assert movement.unit_cost == Decimal("2.50")
+    assert movement.reason == "Physical stock count"
+
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Invalid movement type
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_invalid_movement_type():
+    ingredient = make_ingredient("10.00")
+
+    service, db, movement_repository = make_service(
+        ingredient
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient.id,
+        movement_type="invalid",
+        quantity=5,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.create_movement(
+            restaurant_id=ingredient.restaurant_id,
+            data=data,
+        )
+
+    assert exc_info.value.status_code == 400
+
+    assert (
+        exc_info.value.detail
+        == (
+            "Invalid movement type. "
+            "Use purchase, usage, waste, or adjustment."
+        )
+    )
+
+    assert ingredient.current_stock == Decimal("10.00")
+
+    assert movement_repository.movements == []
+    assert db.rollback_called is True
+
+
+# ---------------------------------------------------------------------------
+# Insufficient stock
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -208,72 +400,45 @@ async def test_usage_rejects_insufficient_stock():
 
     with pytest.raises(HTTPException) as exc_info:
         await service.create_movement(
-            restaurant_id=uuid4(),
+            restaurant_id=ingredient.restaurant_id,
             data=data,
         )
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Insufficient stock"
+
     assert ingredient.current_stock == Decimal("5.00")
-    assert movement_repository.created is None
-    assert db.rolled_back is True
-    assert db.committed is False
+
+    assert movement_repository.movements == []
+    assert db.rollback_called is True
+
+
+# ---------------------------------------------------------------------------
+# Quantity validation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_invalid_movement_type_is_rejected():
-    ingredient = make_ingredient("10.00")
+@pytest.mark.parametrize(
+    "quantity",
+    [0, -1],
+)
+async def test_non_positive_quantity_is_rejected(
+    quantity,
+):
+    ingredient_id = uuid4()
 
-    service, db, movement_repository = make_service(
-        ingredient
-    )
-
-    data = InventoryMovementCreate(
-        ingredient_id=ingredient.id,
-        movement_type="something_invalid",
-        quantity=5,
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await service.create_movement(
-            restaurant_id=uuid4(),
-            data=data,
+    with pytest.raises(ValidationError):
+        InventoryMovementCreate(
+            ingredient_id=ingredient_id,
+            movement_type="purchase",
+            quantity=quantity,
         )
 
-    assert exc_info.value.status_code == 400
-    assert ingredient.current_stock == Decimal("10.00")
-    assert movement_repository.created is None
-    assert db.rolled_back is True
-    assert db.committed is False
 
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("quantity", [0, -1])
-async def test_non_positive_quantity_is_rejected(quantity):
-    ingredient = make_ingredient("10.00")
-
-    service, db, movement_repository = make_service(
-        ingredient
-    )
-
-    data = InventoryMovementCreate(
-        ingredient_id=ingredient.id,
-        movement_type="purchase",
-        quantity=quantity,
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await service.create_movement(
-            restaurant_id=uuid4(),
-            data=data,
-        )
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "Quantity must be greater than 0"
-    assert ingredient.current_stock == Decimal("10.00")
-    assert movement_repository.created is None
-    assert db.rolled_back is True
-    assert db.committed is False
+# ---------------------------------------------------------------------------
+# Database failure / rollback
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -291,13 +456,18 @@ async def test_movement_database_failure_rolls_back():
         quantity=5,
     )
 
-    with pytest.raises(RuntimeError, match="Database error"):
+    with pytest.raises(
+        RuntimeError,
+        match="Database error",
+    ):
         await service.create_movement(
-            restaurant_id=uuid4(),
+            restaurant_id=ingredient.restaurant_id,
             data=data,
         )
 
-    assert ingredient.current_stock == Decimal("15.00")
-    assert db.rolled_back is True
-    assert db.committed is False
+    # The fake database records the rollback request,
+    # but does not restore the in-memory Python object.
+    assert movement_repository.movements == []
 
+    assert db.commit_called is False
+    assert db.rollback_called is True

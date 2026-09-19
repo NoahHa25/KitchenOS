@@ -140,7 +140,10 @@ class InventoryConsumptionService:
             await self.inventory_movement_repository.create(
                 ingredient_id=ingredient.id,
                 movement_type="usage",
-                quantity=float(required_quantity),
-                reason=f"Order {order_id}",
-            )
+                quantity=required_quantity,
+                unit_cost=Decimal(
+                    str(ingredient.cost_per_unit)
+             ),
+             reason=f"Order {order_id}",
+     )
 

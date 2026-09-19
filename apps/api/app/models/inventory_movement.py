@@ -1,5 +1,6 @@
-from uuid import UUID, uuid4
 from datetime import datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -27,7 +28,12 @@ class InventoryMovement(Base):
         nullable=False,
     )
 
-    quantity: Mapped[float] = mapped_column(
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(10, 3),
+        nullable=False,
+    )
+
+    unit_cost: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )
@@ -42,3 +48,4 @@ class InventoryMovement(Base):
         default=datetime.utcnow,
         nullable=False,
     )
+

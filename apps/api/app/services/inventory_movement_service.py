@@ -59,10 +59,34 @@ class InventoryMovementService:
                     detail="Quantity must be greater than 0",
                 )
 
-            current_stock = Decimal(str(ingredient.current_stock))
+            current_stock = Decimal(
+                str(ingredient.current_stock)
+            )
+
+            current_unit_cost = Decimal(
+                str(ingredient.cost_per_unit)
+            )
+
+            unit_cost = (
+                Decimal(str(data.unit_cost))
+                if data.unit_cost is not None
+                else current_unit_cost
+            )
+
+            if unit_cost < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unit cost cannot be negative",
+                )
 
             if movement_type == "purchase":
-                ingredient.current_stock = current_stock + quantity
+                ingredient.current_stock = (
+                    current_stock + quantity
+                )
+
+                # A purchase may establish a new cost basis.
+                if data.unit_cost is not None:
+                    ingredient.cost_per_unit = unit_cost
 
             elif movement_type in {"usage", "waste"}:
                 if current_stock < quantity:
@@ -71,7 +95,9 @@ class InventoryMovementService:
                         detail="Insufficient stock",
                     )
 
-                ingredient.current_stock = current_stock - quantity
+                ingredient.current_stock = (
+                    current_stock - quantity
+                )
 
             elif movement_type == "adjustment":
                 ingredient.current_stock = quantity
@@ -79,7 +105,8 @@ class InventoryMovementService:
             movement = await self.movement_repository.create(
                 ingredient_id=data.ingredient_id,
                 movement_type=movement_type,
-                quantity=float(quantity),
+                quantity=quantity,
+                unit_cost=unit_cost,
                 reason=data.reason,
             )
 
@@ -113,3 +140,4 @@ class InventoryMovementService:
         return await self.movement_repository.get_all(
             ingredient_id=ingredient_id,
         )
+

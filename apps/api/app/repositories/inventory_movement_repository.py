@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,13 +15,15 @@ class InventoryMovementRepository:
         self,
         ingredient_id: UUID,
         movement_type: str,
-        quantity: float,
+        quantity: Decimal,
+        unit_cost: Decimal,
         reason: str | None = None,
     ) -> InventoryMovement:
         movement = InventoryMovement(
             ingredient_id=ingredient_id,
             movement_type=movement_type,
             quantity=quantity,
+            unit_cost=unit_cost,
             reason=reason,
         )
 
@@ -44,3 +47,4 @@ class InventoryMovementRepository:
         )
 
         return list(result.scalars().all())
+

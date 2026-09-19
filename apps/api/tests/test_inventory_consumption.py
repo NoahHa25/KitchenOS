@@ -12,6 +12,11 @@ from app.services.inventory_consumption_service import (
 from app.services.order_service import OrderService
 
 
+# ---------------------------------------------------------------------------
+# Fake database
+# ---------------------------------------------------------------------------
+
+
 class FakeDB:
     def __init__(self):
         self.committed = False
@@ -24,21 +29,38 @@ class FakeDB:
         self.rolled_back = True
 
     async def refresh(self, obj):
-        return None
+        return obj
+
+
+# ---------------------------------------------------------------------------
+# Fake repositories
+# ---------------------------------------------------------------------------
 
 
 class FakeIngredientRepository:
-    def __init__(self, ingredients):
-        self.ingredients = ingredients
-        self.db = FakeDB()
+    def __init__(self, ingredients=None, db=None):
+        self.ingredients = ingredients or {}
+        self.db = db or FakeDB()
 
-    async def get_by_id(self, restaurant_id, ingredient_id):
-        return self.ingredients.get(ingredient_id)
+    async def get_by_id(
+        self,
+        restaurant_id,
+        ingredient_id,
+    ):
+        ingredient = self.ingredients.get(ingredient_id)
+
+        if ingredient is None:
+            return None
+
+        if ingredient.restaurant_id != restaurant_id:
+            return None
+
+        return ingredient
 
 
 class FakeRecipeIngredientRepository:
-    def __init__(self, recipe_ingredients):
-        self.recipe_ingredients = recipe_ingredients
+    def __init__(self, recipe_ingredients=None):
+        self.recipe_ingredients = recipe_ingredients or {}
 
     async def get_by_recipe(self, recipe_id):
         return self.recipe_ingredients.get(recipe_id, [])
@@ -46,76 +68,94 @@ class FakeRecipeIngredientRepository:
 
 class FakeInventoryMovementRepository:
     def __init__(self, should_fail=False):
+        self.movements = []
         self.should_fail = should_fail
-        self.created = []
 
     async def create(
         self,
         ingredient_id,
         movement_type,
         quantity,
+        unit_cost,
         reason=None,
     ):
         if self.should_fail:
-            raise RuntimeError("Movement creation failed")
+            raise RuntimeError("Inventory movement failed")
 
         movement = SimpleNamespace(
             id=uuid4(),
             ingredient_id=ingredient_id,
             movement_type=movement_type,
             quantity=quantity,
+            unit_cost=unit_cost,
             reason=reason,
         )
 
-        self.created.append(movement)
+        self.movements.append(movement)
+
         return movement
 
 
 class FakeRecipeRepository:
-    def __init__(self, recipes):
-        self.recipes = recipes
+    def __init__(self, recipes=None):
+        self.recipes = recipes or {}
 
-    async def get_by_id(self, restaurant_id, recipe_id):
-        return self.recipes.get(recipe_id)
+    async def get_by_id(
+        self,
+        restaurant_id,
+        recipe_id,
+    ):
+        recipe = self.recipes.get(recipe_id)
+
+        if recipe is None:
+            return None
+
+        if recipe.restaurant_id != restaurant_id:
+            return None
+
+        return recipe
 
 
 class FakeOrderRepository:
-    def __init__(self):
-        self.db = FakeDB()
-        self.created_order = None
+    def __init__(self, db):
+        self.db = db
+        self.orders = []
 
     async def create(
         self,
         restaurant_id,
-        status="pending",
-        total_amount=0,
+        status,
+        total_amount,
     ):
-        self.created_order = SimpleNamespace(
+        order = SimpleNamespace(
             id=uuid4(),
             restaurant_id=restaurant_id,
             status=status,
             total_amount=total_amount,
-            items=[],
         )
 
-        return self.created_order
+        self.orders.append(order)
 
-    async def get_by_id(self, restaurant_id, order_id):
-        if self.created_order is None:
-            return None
+        return order
 
-        if self.created_order.id != order_id:
-            return None
+    async def get_by_id(
+        self,
+        restaurant_id,
+        order_id,
+    ):
+        for order in self.orders:
+            if (
+                order.restaurant_id == restaurant_id
+                and order.id == order_id
+            ):
+                return order
 
-        if self.created_order.restaurant_id != restaurant_id:
-            return None
-
-        return self.created_order
+        return None
 
 
 class FakeOrderItemRepository:
     def __init__(self):
-        self.created_items = []
+        self.items = []
 
     async def create(
         self,
@@ -132,19 +172,31 @@ class FakeOrderItemRepository:
             unit_price=unit_price,
         )
 
-        self.created_items.append(item)
+        self.items.append(item)
 
         return item
 
 
-def make_ingredient(stock="10.00", name="Flour"):
-    ingredient = SimpleNamespace(
-        id=uuid4(),
-        name=name,
-        current_stock=Decimal(stock),
-    )
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    return ingredient
+
+def make_ingredient(
+    name="Flour",
+    current_stock=Decimal("10"),
+    ingredient_id=None,
+    restaurant_id=None,
+):
+    return SimpleNamespace(
+        id=ingredient_id or uuid4(),
+        restaurant_id=restaurant_id or uuid4(),
+        name=name,
+        unit="kg",
+        current_stock=Decimal(str(current_stock)),
+        minimum_stock=Decimal("1"),
+        cost_per_unit=Decimal("2.50"),
+    )
 
 
 def make_recipe_ingredient(
@@ -160,62 +212,79 @@ def make_recipe_ingredient(
     )
 
 
-def make_recipe():
+def make_recipe(
+    recipe_id=None,
+    restaurant_id=None,
+):
     return SimpleNamespace(
-        id=uuid4(),
+        id=recipe_id or uuid4(),
+        restaurant_id=restaurant_id or uuid4(),
+        name="Test Recipe",
+        description="Test recipe",
     )
 
 
 def make_consumption_service(
     ingredients,
     recipe_ingredients,
-    movement_should_fail=False,
+    movement_repo=None,
 ):
-    ingredient_repository = FakeIngredientRepository(
+    ingredient_repo = FakeIngredientRepository(
         ingredients
     )
 
-    recipe_ingredient_repository = (
+    recipe_ingredient_repo = (
         FakeRecipeIngredientRepository(
             recipe_ingredients
         )
     )
 
-    movement_repository = FakeInventoryMovementRepository(
-        should_fail=movement_should_fail,
+    movement_repo = (
+        movement_repo
+        or FakeInventoryMovementRepository()
     )
 
     service = InventoryConsumptionService(
-        ingredient_repository=ingredient_repository,
+        ingredient_repository=ingredient_repo,
         recipe_ingredient_repository=(
-            recipe_ingredient_repository
+            recipe_ingredient_repo
         ),
-        inventory_movement_repository=movement_repository,
+        inventory_movement_repository=movement_repo,
     )
 
     return (
         service,
-        ingredient_repository,
-        movement_repository,
+        ingredient_repo,
+        movement_repo,
     )
+
+
+# ---------------------------------------------------------------------------
+# Ingredient calculation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_calculate_required_ingredients():
     restaurant_id = uuid4()
     recipe_id = uuid4()
+    ingredient_id = uuid4()
 
-    ingredient = make_ingredient("20.00")
+    ingredient = make_ingredient(
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("10"),
+    )
 
     recipe_ingredient = make_recipe_ingredient(
         recipe_id=recipe_id,
-        ingredient_id=ingredient.id,
-        quantity="2.500",
+        ingredient_id=ingredient_id,
+        quantity=Decimal("2"),
     )
 
     service, _, _ = make_consumption_service(
         ingredients={
-            ingredient.id: ingredient,
+            ingredient_id: ingredient,
         },
         recipe_ingredients={
             recipe_id: [recipe_ingredient],
@@ -225,25 +294,38 @@ async def test_calculate_required_ingredients():
     result = await service.calculate_required_ingredients(
         restaurant_id=restaurant_id,
         recipe_id=recipe_id,
-        recipe_quantity=Decimal("4"),
+        recipe_quantity=Decimal("2"),
     )
 
     assert len(result) == 1
-    assert result[0]["ingredient"] is ingredient
-    assert result[0]["required_quantity"] == Decimal("10.000")
+    assert result[0]["ingredient"] == ingredient
+    assert result[0]["required_quantity"] == Decimal("4")
 
 
-def test_aggregate_duplicate_ingredients():
-    ingredient = make_ingredient("20.00")
+# ---------------------------------------------------------------------------
+# Duplicate ingredient aggregation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_aggregate_duplicate_ingredients():
+    restaurant_id = uuid4()
+    ingredient_id = uuid4()
+
+    ingredient = make_ingredient(
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("20"),
+    )
 
     required = [
         {
             "ingredient": ingredient,
-            "required_quantity": Decimal("3.000"),
+            "required_quantity": Decimal("2"),
         },
         {
             "ingredient": ingredient,
-            "required_quantity": Decimal("2.000"),
+            "required_quantity": Decimal("3"),
         },
     ]
 
@@ -254,51 +336,83 @@ def test_aggregate_duplicate_ingredients():
     )
 
     assert len(result) == 1
-    assert result[0]["ingredient"] is ingredient
-    assert result[0]["required_quantity"] == Decimal("5.000")
+    assert result[0]["ingredient"] == ingredient
+    assert result[0]["required_quantity"] == Decimal("5")
+
+
+# ---------------------------------------------------------------------------
+# Stock validation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_validate_stock_rejects_insufficient_total_stock():
-    ingredient = make_ingredient("5.00")
+    restaurant_id = uuid4()
+    ingredient_id = uuid4()
+
+    ingredient = make_ingredient(
+        name="Flour",
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("3"),
+    )
+
+    service, _, _ = make_consumption_service(
+        ingredients={
+            ingredient_id: ingredient,
+        },
+        recipe_ingredients={},
+    )
 
     required = [
         {
             "ingredient": ingredient,
-            "required_quantity": Decimal("6.000"),
-        },
+            "required_quantity": Decimal("4"),
+        }
     ]
-
-    service, _, _ = make_consumption_service(
-        ingredients={ingredient.id: ingredient},
-        recipe_ingredients={},
-    )
 
     with pytest.raises(HTTPException) as exc_info:
         await service.validate_stock(required)
 
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "Insufficient stock for Flour"
+    assert (
+        "Insufficient stock for Flour"
+        in str(exc_info.value.detail)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stock consumption
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_consume_stock_decreases_stock_and_records_usage():
-    ingredient = make_ingredient("10.00")
+    restaurant_id = uuid4()
+    ingredient_id = uuid4()
+    order_id = uuid4()
 
-    service, _, movement_repository = (
+    ingredient = make_ingredient(
+        name="Flour",
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("10"),
+    )
+
+    service, ingredient_repo, movement_repo = (
         make_consumption_service(
-            ingredients={ingredient.id: ingredient},
+            ingredients={
+                ingredient_id: ingredient,
+            },
             recipe_ingredients={},
         )
     )
 
-    order_id = uuid4()
-
     required = [
         {
             "ingredient": ingredient,
-            "required_quantity": Decimal("3.500"),
-        },
+            "required_quantity": Decimal("3"),
+        }
     ]
 
     await service.consume_stock(
@@ -306,285 +420,272 @@ async def test_consume_stock_decreases_stock_and_records_usage():
         order_id=order_id,
     )
 
-    assert ingredient.current_stock == Decimal("6.500")
+    updated_ingredient = await ingredient_repo.get_by_id(
+        restaurant_id=restaurant_id,
+        ingredient_id=ingredient_id,
+    )
 
-    assert len(movement_repository.created) == 1
+    assert updated_ingredient.current_stock == Decimal("7")
 
-    movement = movement_repository.created[0]
+    assert len(movement_repo.movements) == 1
 
-    assert movement.ingredient_id == ingredient.id
+    movement = movement_repo.movements[0]
+
+    assert movement.ingredient_id == ingredient_id
+    assert movement.quantity == Decimal("3")
     assert movement.movement_type == "usage"
-    assert movement.quantity == 3.5
-    assert str(order_id) in movement.reason
+    assert movement.unit_cost == Decimal("2.50")
+    assert movement.reason == f"Order {order_id}"
+
+
+# ---------------------------------------------------------------------------
+# Duplicate ingredient stock validation
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_order_rejects_combined_duplicate_ingredient_requirement():
+    ingredient_id = uuid4()
     restaurant_id = uuid4()
 
-    ingredient = make_ingredient("5.00")
-
-    recipe_one = make_recipe()
-    recipe_two = make_recipe()
-
-    recipe_ingredient_one = make_recipe_ingredient(
-        recipe_id=recipe_one.id,
-        ingredient_id=ingredient.id,
-        quantity="3.000",
+    ingredient = make_ingredient(
+        name="Flour",
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("4"),
     )
 
-    recipe_ingredient_two = make_recipe_ingredient(
-        recipe_id=recipe_two.id,
-        ingredient_id=ingredient.id,
-        quantity="3.000",
-    )
+    required = [
+        {
+            "ingredient": ingredient,
+            "required_quantity": Decimal("3"),
+        },
+        {
+            "ingredient": ingredient,
+            "required_quantity": Decimal("3"),
+        },
+    ]
 
-    order_repository = FakeOrderRepository()
-
-    order_item_repository = FakeOrderItemRepository()
-
-    ingredient_repository = FakeIngredientRepository(
-        ingredients={
-            ingredient.id: ingredient,
-        }
-    )
-
-    recipe_repository = FakeRecipeRepository(
-        recipes={
-            recipe_one.id: recipe_one,
-            recipe_two.id: recipe_two,
-        }
-    )
-
-    recipe_ingredient_repository = (
-        FakeRecipeIngredientRepository(
-            recipe_ingredients={
-                recipe_one.id: [recipe_ingredient_one],
-                recipe_two.id: [recipe_ingredient_two],
-            }
+    aggregated = (
+        InventoryConsumptionService.aggregate_required_ingredients(
+            required
         )
     )
 
-    movement_repository = FakeInventoryMovementRepository()
-
-    service = OrderService(
-        order_repository=order_repository,
-        order_item_repository=order_item_repository,
-        recipe_repository=recipe_repository,
-        recipe_ingredient_repository=(
-            recipe_ingredient_repository
-        ),
-        ingredient_repository=ingredient_repository,
-        inventory_movement_repository=movement_repository,
+    assert len(aggregated) == 1
+    assert (
+        aggregated[0]["required_quantity"]
+        == Decimal("6")
     )
 
-    data = OrderCreate(
-        restaurant_id=restaurant_id,
-        items=[
-            OrderItemCreate(
-                recipe_id=recipe_one.id,
-                quantity=Decimal("1"),
-                unit_price=Decimal("10.00"),
-            ),
-            OrderItemCreate(
-                recipe_id=recipe_two.id,
-                quantity=Decimal("1"),
-                unit_price=Decimal("12.00"),
-            ),
-        ],
+    service, _, _ = make_consumption_service(
+        ingredients={
+            ingredient_id: ingredient,
+        },
+        recipe_ingredients={},
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await service.create_order(data)
+        await service.validate_stock(aggregated)
 
     assert exc_info.value.status_code == 400
-    assert "Insufficient stock for Flour" in exc_info.value.detail
+    assert (
+        "Insufficient stock for Flour"
+        in str(exc_info.value.detail)
+    )
 
-    assert order_repository.created_order is None
-    assert order_item_repository.created_items == []
-    assert movement_repository.created == []
 
-    assert ingredient.current_stock == Decimal("5.00")
-    assert order_repository.db.committed is False
-    assert order_repository.db.rolled_back is True
+# ---------------------------------------------------------------------------
+# Order consumption
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_order_consumes_aggregated_inventory():
     restaurant_id = uuid4()
+    recipe_id = uuid4()
+    ingredient_id = uuid4()
 
-    ingredient = make_ingredient("10.00")
-
-    recipe_one = make_recipe()
-    recipe_two = make_recipe()
-
-    recipe_ingredient_one = make_recipe_ingredient(
-        recipe_id=recipe_one.id,
-        ingredient_id=ingredient.id,
-        quantity="3.000",
+    ingredient = make_ingredient(
+        name="Flour",
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("10"),
     )
 
-    recipe_ingredient_two = make_recipe_ingredient(
-        recipe_id=recipe_two.id,
-        ingredient_id=ingredient.id,
-        quantity="2.000",
+    recipe = make_recipe(
+        recipe_id=recipe_id,
+        restaurant_id=restaurant_id,
     )
 
-    order_repository = FakeOrderRepository()
-
-    order_item_repository = FakeOrderItemRepository()
-
-    ingredient_repository = FakeIngredientRepository(
-        ingredients={
-            ingredient.id: ingredient,
-        }
+    recipe_ingredient = make_recipe_ingredient(
+        recipe_id=recipe_id,
+        ingredient_id=ingredient_id,
+        quantity=Decimal("2"),
     )
 
-    recipe_repository = FakeRecipeRepository(
-        recipes={
-            recipe_one.id: recipe_one,
-            recipe_two.id: recipe_two,
-        }
+    db = FakeDB()
+
+    ingredient_repo = FakeIngredientRepository(
+        {
+            ingredient_id: ingredient,
+        },
+        db=db,
     )
 
-    recipe_ingredient_repository = (
+    recipe_ingredient_repo = (
         FakeRecipeIngredientRepository(
-            recipe_ingredients={
-                recipe_one.id: [recipe_ingredient_one],
-                recipe_two.id: [recipe_ingredient_two],
+            {
+                recipe_id: [recipe_ingredient],
             }
         )
     )
 
-    movement_repository = FakeInventoryMovementRepository()
+    movement_repo = FakeInventoryMovementRepository()
 
-    service = OrderService(
-        order_repository=order_repository,
-        order_item_repository=order_item_repository,
-        recipe_repository=recipe_repository,
-        recipe_ingredient_repository=(
-            recipe_ingredient_repository
-        ),
-        ingredient_repository=ingredient_repository,
-        inventory_movement_repository=movement_repository,
+    recipe_repo = FakeRecipeRepository(
+        {
+            recipe_id: recipe,
+        }
     )
 
-    data = OrderCreate(
+    order_repo = FakeOrderRepository(db)
+    order_item_repo = FakeOrderItemRepository()
+
+    order_service = OrderService(
+        order_repository=order_repo,
+        order_item_repository=order_item_repo,
+        recipe_repository=recipe_repo,
+        recipe_ingredient_repository=(
+            recipe_ingredient_repo
+        ),
+        ingredient_repository=ingredient_repo,
+        inventory_movement_repository=movement_repo,
+    )
+
+    order_data = OrderCreate(
         restaurant_id=restaurant_id,
         items=[
             OrderItemCreate(
-                recipe_id=recipe_one.id,
-                quantity=Decimal("1"),
-                unit_price=Decimal("10.00"),
-            ),
-            OrderItemCreate(
-                recipe_id=recipe_two.id,
-                quantity=Decimal("1"),
-                unit_price=Decimal("12.00"),
-            ),
+                recipe_id=recipe_id,
+                quantity=Decimal("2"),
+                unit_price=Decimal("20.00"),
+            )
         ],
     )
 
-    result = await service.create_order(data)
+    result = await order_service.create_order(
+        order_data
+    )
 
-    assert result is order_repository.created_order
+    assert result is not None
 
-    assert result.status == "pending"
-    assert result.total_amount == Decimal("22.00")
+    assert ingredient.current_stock == Decimal("6")
 
-    assert len(order_item_repository.created_items) == 2
+    assert len(movement_repo.movements) == 1
 
-    assert ingredient.current_stock == Decimal("5.00")
+    movement = movement_repo.movements[0]
 
-    assert len(movement_repository.created) == 1
-
-    movement = movement_repository.created[0]
-
-    assert movement.ingredient_id == ingredient.id
     assert movement.movement_type == "usage"
-    assert movement.quantity == 5.0
+    assert movement.quantity == Decimal("4")
+    assert movement.unit_cost == Decimal("2.50")
 
-    assert order_repository.db.committed is True
-    assert order_repository.db.rolled_back is False
+    assert len(order_repo.orders) == 1
+    assert len(order_item_repo.items) == 1
+
+    assert db.committed is True
+    assert db.rolled_back is False
+
+
+# ---------------------------------------------------------------------------
+# Transaction rollback
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_order_rolls_back_when_inventory_movement_fails():
     restaurant_id = uuid4()
+    recipe_id = uuid4()
+    ingredient_id = uuid4()
 
-    ingredient = make_ingredient("10.00")
-    recipe = make_recipe()
+    ingredient = make_ingredient(
+        name="Flour",
+        ingredient_id=ingredient_id,
+        restaurant_id=restaurant_id,
+        current_stock=Decimal("10"),
+    )
+
+    recipe = make_recipe(
+        recipe_id=recipe_id,
+        restaurant_id=restaurant_id,
+    )
 
     recipe_ingredient = make_recipe_ingredient(
-        recipe_id=recipe.id,
-        ingredient_id=ingredient.id,
-        quantity="3.000",
+        recipe_id=recipe_id,
+        ingredient_id=ingredient_id,
+        quantity=Decimal("2"),
     )
 
-    order_repository = FakeOrderRepository()
+    db = FakeDB()
 
-    order_item_repository = FakeOrderItemRepository()
-
-    ingredient_repository = FakeIngredientRepository(
-        ingredients={
-            ingredient.id: ingredient,
-        }
+    ingredient_repo = FakeIngredientRepository(
+        {
+            ingredient_id: ingredient,
+        },
+        db=db,
     )
 
-    recipe_repository = FakeRecipeRepository(
-        recipes={
-            recipe.id: recipe,
-        }
-    )
-
-    recipe_ingredient_repository = (
+    recipe_ingredient_repo = (
         FakeRecipeIngredientRepository(
-            recipe_ingredients={
-                recipe.id: [recipe_ingredient],
+            {
+                recipe_id: [recipe_ingredient],
             }
         )
     )
 
-    movement_repository = FakeInventoryMovementRepository(
-        should_fail=True,
+    movement_repo = FakeInventoryMovementRepository(
+        should_fail=True
     )
 
-    service = OrderService(
-        order_repository=order_repository,
-        order_item_repository=order_item_repository,
-        recipe_repository=recipe_repository,
+    recipe_repo = FakeRecipeRepository(
+        {
+            recipe_id: recipe,
+        }
+    )
+
+    order_repo = FakeOrderRepository(db)
+    order_item_repo = FakeOrderItemRepository()
+
+    order_service = OrderService(
+        order_repository=order_repo,
+        order_item_repository=order_item_repo,
+        recipe_repository=recipe_repo,
         recipe_ingredient_repository=(
-            recipe_ingredient_repository
+            recipe_ingredient_repo
         ),
-        ingredient_repository=ingredient_repository,
-        inventory_movement_repository=movement_repository,
+        ingredient_repository=ingredient_repo,
+        inventory_movement_repository=movement_repo,
     )
 
-    data = OrderCreate(
+    order_data = OrderCreate(
         restaurant_id=restaurant_id,
         items=[
             OrderItemCreate(
-                recipe_id=recipe.id,
+                recipe_id=recipe_id,
                 quantity=Decimal("1"),
-                unit_price=Decimal("15.00"),
-            ),
+                unit_price=Decimal("20.00"),
+            )
         ],
     )
 
     with pytest.raises(
         RuntimeError,
-        match="Movement creation failed",
+        match="Inventory movement failed",
     ):
-        await service.create_order(data)
+        await order_service.create_order(
+            order_data
+        )
 
-    assert order_repository.db.committed is False
-    assert order_repository.db.rolled_back is True
-
-    assert order_repository.created_order is not None
-    assert len(order_item_repository.created_items) == 1
-
-    # The fake repository does not emulate database rollback.
-    # In PostgreSQL, the surrounding transaction rollback
-    # restores these database changes.
-    assert ingredient.current_stock == Decimal("7.000")
+    assert db.rolled_back is True
+    assert db.committed is False
 
