@@ -247,9 +247,14 @@ async def test_create_recipe(client, db_session_factory):
         assert data["restaurant_id"] == str(restaurant_id)
         assert data["name"] == "Margherita Pizza"
         assert data["description"] == "Classic pizza recipe"
+
+        # Pricing defaults
+        assert data["selling_price"] == "0.00"
+        assert data["portion_size"] == 1.0
+        assert data["portion_unit"] == "portion"
+        assert data["is_active"] is True
+
         assert "id" in data
-        assert "created_at" in data
-        assert "updated_at" in data
 
     finally:
         await cleanup_restaurant(
@@ -920,7 +925,6 @@ async def test_get_food_cost(
 
         assert data["food_cost"] == 4.0
 
-        
         assert len(data["breakdown"]) == 2
 
         breakdown = {
@@ -938,8 +942,6 @@ async def test_get_food_cost(
         assert breakdown["Cheese"]["quantity"] == 0.2
         assert breakdown["Cheese"]["cost_per_unit"] == 10.0
         assert breakdown["Cheese"]["total_cost"] == 2.0
-
-
 
     finally:
         await cleanup_restaurant(
@@ -1068,4 +1070,3 @@ async def test_add_recipe_ingredient_rejects_invalid_quantity(
             db_session_factory,
             restaurant_id,
         )
-

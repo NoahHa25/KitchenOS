@@ -1,11 +1,15 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.recipe import Recipe
 
 
 class Restaurant(Base):
@@ -40,4 +44,10 @@ class Restaurant(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    recipes: Mapped[list["Recipe"]] = relationship(
+        "Recipe",
+        back_populates="restaurant",
+        cascade="all, delete-orphan",
     )

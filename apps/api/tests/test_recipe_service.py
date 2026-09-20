@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -27,11 +28,19 @@ class FakeRecipe:
         restaurant_id,
         name="Pasta",
         description="Classic pasta",
+        selling_price=Decimal("0.00"),
+        portion_size=1.0,
+        portion_unit="portion",
+        is_active=True,
     ):
         self.id = uuid4()
         self.restaurant_id = restaurant_id
         self.name = name
         self.description = description
+        self.selling_price = selling_price
+        self.portion_size = portion_size
+        self.portion_unit = portion_unit
+        self.is_active = is_active
 
 
 class FakeRecipeRepository:
@@ -52,17 +61,29 @@ class FakeRecipeRepository:
         restaurant_id,
         name,
         description=None,
+        selling_price=Decimal("0.00"),
+        portion_size=1.0,
+        portion_unit="portion",
+        is_active=True,
     ):
         self.created_args = {
             "restaurant_id": restaurant_id,
             "name": name,
             "description": description,
+            "selling_price": selling_price,
+            "portion_size": portion_size,
+            "portion_unit": portion_unit,
+            "is_active": is_active,
         }
 
         recipe = FakeRecipe(
             restaurant_id=restaurant_id,
             name=name,
             description=description,
+            selling_price=selling_price,
+            portion_size=portion_size,
+            portion_unit=portion_unit,
+            is_active=is_active,
         )
 
         self.recipes.append(recipe)
@@ -96,11 +117,19 @@ class FakeRecipeRepository:
         recipe,
         name=None,
         description=None,
+        selling_price=None,
+        portion_size=None,
+        portion_unit=None,
+        is_active=None,
     ):
         self.updated_args = {
             "recipe": recipe,
             "name": name,
             "description": description,
+            "selling_price": selling_price,
+            "portion_size": portion_size,
+            "portion_unit": portion_unit,
+            "is_active": is_active,
         }
 
         if name is not None:
@@ -108,6 +137,18 @@ class FakeRecipeRepository:
 
         if description is not None:
             recipe.description = description
+
+        if selling_price is not None:
+            recipe.selling_price = selling_price
+
+        if portion_size is not None:
+            recipe.portion_size = portion_size
+
+        if portion_unit is not None:
+            recipe.portion_unit = portion_unit
+
+        if is_active is not None:
+            recipe.is_active = is_active
 
         return recipe
 
@@ -142,11 +183,19 @@ async def test_create_recipe():
     assert recipe.restaurant_id == restaurant_id
     assert recipe.name == "Carbonara"
     assert recipe.description == "Creamy pasta"
+    assert recipe.selling_price == Decimal("0.00")
+    assert recipe.portion_size == 1.0
+    assert recipe.portion_unit == "portion"
+    assert recipe.is_active is True
 
     assert repository.created_args == {
         "restaurant_id": restaurant_id,
         "name": "Carbonara",
         "description": "Creamy pasta",
+        "selling_price": Decimal("0.00"),
+        "portion_size": 1.0,
+        "portion_unit": "portion",
+        "is_active": True,
     }
 
     assert repository.db.commit_called is True
@@ -245,6 +294,16 @@ async def test_update_recipe():
     assert recipe.name == "New Name"
     assert recipe.description == "New description"
 
+    assert repository.updated_args == {
+        "recipe": recipe,
+        "name": "New Name",
+        "description": "New description",
+        "selling_price": None,
+        "portion_size": None,
+        "portion_unit": None,
+        "is_active": None,
+    }
+
     assert repository.db.commit_called is True
 
 
@@ -300,4 +359,3 @@ async def test_delete_recipe_returns_false_when_recipe_does_not_exist():
     assert result is False
     assert repository.deleted_recipe is None
     assert repository.db.commit_called is False
-

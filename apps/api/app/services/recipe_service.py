@@ -16,6 +16,10 @@ class RecipeService:
             restaurant_id=data.restaurant_id,
             name=data.name,
             description=data.description,
+            selling_price=data.selling_price,
+            portion_size=data.portion_size,
+            portion_unit=data.portion_unit,
+            is_active=data.is_active,
         )
 
         await self.repository.db.commit()
@@ -59,6 +63,10 @@ class RecipeService:
             recipe=recipe,
             name=data.name,
             description=data.description,
+            selling_price=data.selling_price,
+            portion_size=data.portion_size,
+            portion_unit=data.portion_unit,
+            is_active=data.is_active,
         )
 
         await self.repository.db.commit()

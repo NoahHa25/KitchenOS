@@ -30,13 +30,12 @@ from app.services.recipe_ingredient_service import (
 )
 from app.services.recipe_service import RecipeService
 
+
 router = APIRouter(
     prefix="/recipes",
     tags=["Recipes"],
 )
 
-
-# ---------- Service Builders ----------
 
 def get_recipe_service(db: AsyncSession) -> RecipeService:
     return RecipeService(
@@ -63,8 +62,6 @@ def get_food_cost_service(db: AsyncSession) -> FoodCostService:
         ingredient_repository=IngredientRepository(db),
     )
 
-
-# ---------- Recipe CRUD ----------
 
 @router.post(
     "",
@@ -170,8 +167,6 @@ async def delete_recipe(
         "recipe_id": recipe_id,
     }
 
-
-# ---------- Recipe Ingredients ----------
 
 @router.post(
     "/{recipe_id}/ingredients",
@@ -282,8 +277,6 @@ async def delete_recipe_ingredient(
         "recipe_ingredient_id": recipe_ingredient_id,
     }
 
-
-# ---------- Food Cost ----------
 
 @router.get(
     "/{recipe_id}/food-cost",
