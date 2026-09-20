@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getOrders, getRestaurants, getSalesSummary } from "@/lib/api/client";
 
 import OrderStatus from "@/components/dashboard/OrderStatus";
@@ -123,12 +125,12 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <a
+        <Link
           href="/orders"
           className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           View Orders
-        </a>
+        </Link>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

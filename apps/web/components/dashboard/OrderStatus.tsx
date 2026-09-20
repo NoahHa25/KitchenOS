@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type OrderStatusProps = {
   counts: {
     pending: number;
@@ -63,12 +65,12 @@ export default function OrderStatus({ counts }: OrderStatusProps) {
       </div>
 
       <div className="border-t border-slate-200 p-6">
-        <a
+        <Link
           href="/orders"
           className="block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           Open Orders
-        </a>
+        </Link>
       </div>
     </div>
   );

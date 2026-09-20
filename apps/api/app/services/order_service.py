@@ -149,8 +149,11 @@ class OrderService:
                 "cancelled",
             },
             "preparing": {
-                "completed",
+                "ready",
                 "cancelled",
+            },
+            "ready": {
+                "completed",
             },
             "completed": set(),
             "cancelled": set(),
@@ -173,4 +176,3 @@ class OrderService:
             order=order,
             status=new_status,
         )
-

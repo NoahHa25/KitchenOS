@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Order } from "@/types/orders";
 
 type RecentOrdersProps = {
@@ -45,12 +47,12 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
           </p>
         </div>
 
-        <a
+        <Link
           href="/orders"
           className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
         >
           View all
-        </a>
+        </Link>
       </div>
 
       {recentOrders.length === 0 ? (
