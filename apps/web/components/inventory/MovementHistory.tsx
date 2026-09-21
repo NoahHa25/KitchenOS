@@ -10,14 +10,14 @@ type MovementHistoryProps = {
 
 const movementStyles: Record<string, string> = {
   purchase: "bg-emerald-50 text-emerald-700",
-  sale: "bg-blue-50 text-blue-700",
+  usage: "bg-blue-50 text-blue-700",
   waste: "bg-red-50 text-red-700",
   adjustment: "bg-amber-50 text-amber-700",
 };
 
 const movementSymbols: Record<string, string> = {
   purchase: "+",
-  sale: "−",
+  usage: "−",
   waste: "−",
   adjustment: "↕",
 };

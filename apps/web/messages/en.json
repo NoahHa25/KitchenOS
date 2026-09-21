@@ -106,10 +106,20 @@
     "noMovementHistory": "No movement history",
     "noMovementHistoryDescription": "Stock movements for this ingredient will appear here.",
     "movementHistoryLoadFailed": "Failed to load movement history.",
-
+    "updating": "Updating...",
+    "recordWaste": "Record Waste",
+    "recordingWaste": "Recording...",
+    "wasteReason": "Reason",
+    "wasteReasonPlaceholder": "Why was this ingredient wasted?",
+    "estimatedWasteCost": "Estimated Cost Impact",
+    "estimatedWasteCostDescription": "Estimated value of the inventory being written off.",
+    "wasteQuantityInvalid": "Quantity must be greater than 0.",
+    "wasteQuantityExceedsStock": "Waste quantity cannot exceed current stock.",
+    "wasteReasonRequired": "Please provide a reason for the waste.",
+    "wasteRecordFailed": "Failed to record waste.",
     "movementTypes": {
       "purchase": "Purchase",
-      "sale": "Sale",
+      "usage": "Usage",
       "waste": "Waste",
       "adjustment": "Adjustment"
     }

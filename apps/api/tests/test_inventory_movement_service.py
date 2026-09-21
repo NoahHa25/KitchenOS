@@ -471,3 +471,145 @@ async def test_movement_database_failure_rolls_back():
 
     assert db.commit_called is False
     assert db.rollback_called is True
+
+
+# ---------------------------------------------------------------------------
+# Purchase with explicit unit cost
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_purchase_updates_cost_when_unit_cost_is_provided():
+    ingredient = make_ingredient(
+        current_stock="10.00",
+        cost_per_unit="2.50",
+    )
+
+    service, db, movement_repository = make_service(
+        ingredient
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient.id,
+        movement_type="purchase",
+        quantity=5,
+        unit_cost=3.75,
+        reason="New supplier price",
+    )
+
+    await service.create_movement(
+        restaurant_id=ingredient.restaurant_id,
+        data=data,
+    )
+
+    assert ingredient.current_stock == Decimal("15.00")
+    assert ingredient.cost_per_unit == Decimal("3.75")
+
+    movement = movement_repository.movements[0]
+
+    assert movement.unit_cost == Decimal("3.75")
+    assert movement.reason == "New supplier price"
+
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Movement type normalization
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_movement_type_is_normalized():
+    ingredient = make_ingredient("10.00")
+
+    service, db, movement_repository = make_service(
+        ingredient
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient.id,
+        movement_type="  PURCHASE  ",
+        quantity=5,
+    )
+
+    await service.create_movement(
+        restaurant_id=ingredient.restaurant_id,
+        data=data,
+    )
+
+    assert ingredient.current_stock == Decimal("15.00")
+
+    movement = movement_repository.movements[0]
+
+    assert movement.movement_type == "purchase"
+    assert db.commit_called is True
+
+
+# ---------------------------------------------------------------------------
+# Waste insufficient stock
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_waste_rejects_insufficient_stock():
+    ingredient = make_ingredient("5.00")
+
+    service, db, movement_repository = make_service(
+        ingredient
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient.id,
+        movement_type="waste",
+        quantity=10,
+        reason="Spoiled ingredient",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.create_movement(
+            restaurant_id=ingredient.restaurant_id,
+            data=data,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Insufficient stock"
+
+    assert ingredient.current_stock == Decimal("5.00")
+
+    assert movement_repository.movements == []
+    assert db.rollback_called is True
+
+
+# ---------------------------------------------------------------------------
+# Adjustment semantics
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_adjustment_quantity_is_target_stock_not_delta():
+    ingredient = make_ingredient("10.00")
+
+    service, db, movement_repository = make_service(
+        ingredient
+    )
+
+    data = InventoryMovementCreate(
+        ingredient_id=ingredient.id,
+        movement_type="adjustment",
+        quantity=7,
+        reason="Physical stock count",
+    )
+
+    await service.create_movement(
+        restaurant_id=ingredient.restaurant_id,
+        data=data,
+    )
+
+    assert ingredient.current_stock == Decimal("7.00")
+
+    movement = movement_repository.movements[0]
+
+    assert movement.movement_type == "adjustment"
+    assert movement.quantity == Decimal("7")
+
+    assert db.commit_called is True

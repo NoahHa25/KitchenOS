@@ -14,6 +14,7 @@ import type { InventoryMovement } from "@/types/inventory-movements";
 import MovementHistory from "./MovementHistory";
 import RestockModal from "./RestockModal";
 import StockBadge from "./StockBadge";
+import WasteModal from "./WasteModal";
 
 type InventoryTableProps = {
   restaurantId: string;
@@ -28,9 +29,13 @@ export default function InventoryTable({
   const commonT = useTranslations("common");
 
   const [selected, setSelected] = useState<Ingredient | null>(null);
+  const [wasteIngredient, setWasteIngredient] = useState<Ingredient | null>(
+    null,
+  );
   const [historyIngredient, setHistoryIngredient] = useState<Ingredient | null>(
     null,
   );
+
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(false);
@@ -61,6 +66,30 @@ export default function InventoryTable({
           ? {
               ...ingredient,
               current_stock: ingredient.current_stock + quantity,
+              cost_per_unit: unitCost,
+            }
+          : ingredient,
+      ),
+    );
+  }
+
+  async function handleWaste(quantity: number, reason: string) {
+    if (!wasteIngredient) return;
+
+    await createInventoryMovement(restaurantId, {
+      ingredient_id: wasteIngredient.id,
+      movement_type: "waste",
+      quantity,
+      unit_cost: Number(wasteIngredient.cost_per_unit),
+      reason,
+    });
+
+    setRows((current) =>
+      current.map((ingredient) =>
+        ingredient.id === wasteIngredient.id
+          ? {
+              ...ingredient,
+              current_stock: ingredient.current_stock - quantity,
             }
           : ingredient,
       ),
@@ -140,6 +169,13 @@ export default function InventoryTable({
                     </button>
 
                     <button
+                      onClick={() => setWasteIngredient(ingredient)}
+                      className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                    >
+                      {t("recordWaste")}
+                    </button>
+
+                    <button
                       onClick={() => setSelected(ingredient)}
                       className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-800"
                     >
@@ -158,6 +194,17 @@ export default function InventoryTable({
           ingredientName={selected.name}
           onClose={() => setSelected(null)}
           onSubmit={handleRestock}
+        />
+      )}
+
+      {wasteIngredient && (
+        <WasteModal
+          ingredientName={wasteIngredient.name}
+          unit={wasteIngredient.unit}
+          currentStock={wasteIngredient.current_stock}
+          unitCost={Number(wasteIngredient.cost_per_unit)}
+          onClose={() => setWasteIngredient(null)}
+          onSubmit={handleWaste}
         />
       )}
 
