@@ -8,7 +8,10 @@ class IngredientService:
     def __init__(self, repository: IngredientRepository):
         self.repository = repository
 
-    async def create_ingredient(self, data: IngredientCreate):
+    async def create_ingredient(
+        self,
+        data: IngredientCreate,
+    ):
         ingredient = await self.repository.create(
             restaurant_id=data.restaurant_id,
             name=data.name,
@@ -20,9 +23,13 @@ class IngredientService:
 
         await self.repository.db.commit()
         await self.repository.db.refresh(ingredient)
+
         return ingredient
 
-    async def list_ingredients(self, restaurant_id: UUID):
+    async def list_ingredients(
+        self,
+        restaurant_id: UUID,
+    ):
         return await self.repository.get_all(
             restaurant_id=restaurant_id,
         )
@@ -58,6 +65,7 @@ class IngredientService:
 
         await self.repository.db.commit()
         await self.repository.db.refresh(ingredient)
+
         return ingredient
 
     async def delete_ingredient(
@@ -74,3 +82,11 @@ class IngredientService:
             await self.repository.db.commit()
 
         return deleted
+
+    async def get_low_stock(
+        self,
+        restaurant_id: UUID,
+    ):
+        return await self.repository.get_low_stock(
+            restaurant_id=restaurant_id,
+        )

@@ -48,6 +48,23 @@ async def list_ingredients(
 
 
 @router.get(
+    "/low-stock",
+    response_model=list[IngredientResponse],
+)
+async def get_low_stock_ingredients(
+    restaurant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    service = IngredientService(
+        IngredientRepository(db),
+    )
+
+    return await service.get_low_stock(
+        restaurant_id=restaurant_id,
+    )
+
+
+@router.get(
     "/{ingredient_id}",
     response_model=IngredientResponse,
 )

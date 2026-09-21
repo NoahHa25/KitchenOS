@@ -1,7 +1,15 @@
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
-import { getOrders, getRestaurants, getSalesSummary } from "@/lib/api/client";
+import { Link } from "@/i18n/navigation";
 
+import {
+  getLowStockIngredients,
+  getOrders,
+  getRestaurants,
+  getSalesSummary,
+} from "@/lib/api/client";
+
+import LowStockAlert from "@/components/inventory/LowStockAlert";
 import OrderStatus from "@/components/dashboard/OrderStatus";
 import RecentOrders from "@/components/dashboard/RecentOrders";
 import SalesOverview from "@/components/dashboard/SalesOverview";
@@ -11,23 +19,9 @@ export const dynamic = "force-dynamic";
 
 const DEMO_RESTAURANT_SLUG = "kitchenos-demo";
 
-function formatCurrency(value: string | number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 2,
-  }).format(Number(value));
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(date);
-}
-
 export default async function DashboardPage() {
+  const t = await getTranslations("dashboard");
+
   const restaurants = await getRestaurants();
 
   const restaurant = restaurants.find(
@@ -38,9 +32,10 @@ export default async function DashboardPage() {
     throw new Error("KitchenOS demo restaurant not found.");
   }
 
-  const [orders, salesSummary] = await Promise.all([
+  const [orders, salesSummary, lowStockIngredients] = await Promise.all([
     getOrders(restaurant.id),
     getSalesSummary(restaurant.id),
+    getLowStockIngredients(restaurant.id),
   ]);
 
   const orderStatusCounts = {
@@ -70,33 +65,45 @@ export default async function DashboardPage() {
 
   const stats = [
     {
-      label: "Completed Revenue",
-      value: formatCurrency(salesSummary.total_revenue),
-      change: `${salesSummary.total_orders} completed`,
-      description: "Revenue from completed orders",
+      label: t("completedRevenue"),
+      value: new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: "RUB",
+        maximumFractionDigits: 2,
+      }).format(Number(salesSummary.total_revenue)),
+      change: `${salesSummary.total_orders} ${t("completed").toLowerCase()}`,
+      description: t("revenueFromCompletedOrders"),
     },
     {
-      label: "Total Orders",
+      label: t("totalOrders"),
       value: String(orders.length),
-      change: `${orderStatusCounts.pending} pending`,
-      description: "All orders for this restaurant",
+      change: `${orderStatusCounts.pending} ${t("pending").toLowerCase()}`,
+      description: t("allOrdersForRestaurant"),
     },
     {
-      label: "Average Order",
+      label: t("averageOrder"),
       value:
         orders.length > 0
-          ? formatCurrency(
+          ? new Intl.NumberFormat(undefined, {
+              style: "currency",
+              currency: "RUB",
+              maximumFractionDigits: 2,
+            }).format(
               orders.reduce(
                 (total, order) => total + Number(order.total_amount),
                 0,
               ) / orders.length,
             )
-          : formatCurrency("0"),
-      change: `${orders.length} orders`,
-      description: "Average value across all orders",
+          : new Intl.NumberFormat(undefined, {
+              style: "currency",
+              currency: "RUB",
+              maximumFractionDigits: 2,
+            }).format(0),
+      change: `${orders.length} ${t("ordersCount")}`,
+      description: t("averageValueAcrossOrders"),
     },
     {
-      label: "Completed Orders",
+      label: t("completedOrders"),
       value: String(orderStatusCounts.completed),
       change:
         orders.length > 0
@@ -104,7 +111,7 @@ export default async function DashboardPage() {
               (orderStatusCounts.completed / orders.length) * 100,
             )}%`
           : "0%",
-      description: "Share of orders completed",
+      description: t("shareOfOrdersCompleted"),
     },
   ];
 
@@ -113,15 +120,19 @@ export default async function DashboardPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-medium text-slate-500">
-            {formatDate(new Date())}
+            {new Intl.DateTimeFormat(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            }).format(new Date())}
           </p>
 
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
-            Dashboard
+            {t("title")}
           </h1>
 
           <p className="mt-2 text-slate-500">
-            {restaurant.name} · Live operational overview
+            {restaurant.name} · {t("liveOverview")}
           </p>
         </div>
 
@@ -129,9 +140,11 @@ export default async function DashboardPage() {
           href="/orders"
           className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
-          View Orders
+          {t("viewOrders")}
         </Link>
       </div>
+
+      <LowStockAlert ingredients={lowStockIngredients} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
@@ -141,6 +154,7 @@ export default async function DashboardPage() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <SalesOverview data={normalizedSalesData} />
+
         <OrderStatus counts={orderStatusCounts} />
       </section>
 

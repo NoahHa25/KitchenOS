@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { useTranslations } from "next-intl";
+
+import { Link } from "@/i18n/navigation";
 
 type OrderStatusProps = {
   counts: {
@@ -12,34 +14,33 @@ type OrderStatusProps = {
 const statuses = [
   {
     key: "pending",
-    label: "Pending",
     dot: "bg-amber-400",
   },
   {
     key: "preparing",
-    label: "Preparing",
     dot: "bg-blue-500",
   },
   {
     key: "ready",
-    label: "Ready",
     dot: "bg-emerald-500",
   },
   {
     key: "completed",
-    label: "Completed",
     dot: "bg-slate-400",
   },
 ] as const;
 
 export default function OrderStatus({ counts }: OrderStatusProps) {
+  const t = useTranslations("dashboard");
+  const statusT = useTranslations("status");
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-6 py-5">
-        <h2 className="font-semibold text-slate-950">Order Status</h2>
+        <h2 className="font-semibold text-slate-950">{t("orderStatus")}</h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Current orders across the restaurant.
+          {t("currentOrdersAcrossRestaurant")}
         </p>
       </div>
 
@@ -53,7 +54,7 @@ export default function OrderStatus({ counts }: OrderStatusProps) {
               <span className={`h-2.5 w-2.5 rounded-full ${status.dot}`} />
 
               <span className="text-sm font-medium text-slate-700">
-                {status.label}
+                {statusT(status.key)}
               </span>
             </div>
 
@@ -69,7 +70,7 @@ export default function OrderStatus({ counts }: OrderStatusProps) {
           href="/orders"
           className="block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
-          Open Orders
+          {t("viewOrders")}
         </Link>
       </div>
     </div>

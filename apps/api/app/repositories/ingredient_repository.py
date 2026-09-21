@@ -113,3 +113,17 @@ class IngredientRepository:
         await self.db.flush()
 
         return True
+
+    async def get_low_stock(
+        self,
+        restaurant_id: UUID,
+    ) -> list[Ingredient]:
+        result = await self.db.execute(
+            select(Ingredient).where(
+                Ingredient.restaurant_id == restaurant_id,
+                Ingredient.current_stock
+                <= Ingredient.minimum_stock,
+            )
+        )
+
+        return list(result.scalars().all())

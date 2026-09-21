@@ -1,4 +1,8 @@
-import Link from "next/link";
+"use client";
+
+import { useLocale, useTranslations } from "next-intl";
+
+import { Link } from "@/i18n/navigation";
 
 import type { Order } from "@/types/orders";
 
@@ -13,22 +17,12 @@ const statusStyles: Record<string, string> = {
   completed: "bg-slate-100 text-slate-700 ring-slate-500/20",
 };
 
-function formatCurrency(value: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 2,
-  }).format(Number(value));
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 export default function RecentOrders({ orders }: RecentOrdersProps) {
+  const locale = useLocale();
+  const t = useTranslations("dashboard");
+  const ordersT = useTranslations("orders");
+  const statusT = useTranslations("status");
+
   const recentOrders = [...orders]
     .sort(
       (a, b) =>
@@ -36,14 +30,35 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
     )
     .slice(0, 5);
 
+  function formatCurrency(value: string) {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "RUB",
+      maximumFractionDigits: 2,
+    }).format(Number(value));
+  }
+
+  function formatTime(value: string) {
+    return new Intl.DateTimeFormat(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function formatItems(count: number) {
+    return new Intl.PluralRules(locale).select(count) === "one"
+      ? `${count} ${t("item")}`
+      : `${count} ${t("items")}`;
+  }
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col justify-between gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center">
         <div>
-          <h2 className="font-semibold text-slate-950">Recent Orders</h2>
+          <h2 className="font-semibold text-slate-950">{t("recentOrders")}</h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Latest activity from your restaurant.
+            {t("latestRestaurantActivity")}
           </p>
         </div>
 
@@ -51,13 +66,13 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
           href="/orders"
           className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
         >
-          View all
+          {t("viewAll")}
         </Link>
       </div>
 
       {recentOrders.length === 0 ? (
         <div className="px-6 py-12 text-center text-sm text-slate-400">
-          No orders yet.
+          {t("noOrdersYet")}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -65,23 +80,23 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
             <thead className="border-b border-slate-100 bg-slate-50">
               <tr>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Order
+                  {ordersT("order")}
                 </th>
 
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Time
+                  {t("time")}
                 </th>
 
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Items
+                  {ordersT("items")}
                 </th>
 
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
+                  {ordersT("status")}
                 </th>
 
                 <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Total
+                  {ordersT("total")}
                 </th>
               </tr>
             </thead>
@@ -98,8 +113,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
                   </td>
 
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    {order.items.length}{" "}
-                    {order.items.length === 1 ? "item" : "items"}
+                    {formatItems(order.items.length)}
                   </td>
 
                   <td className="px-6 py-4">
@@ -109,7 +123,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
                         "bg-slate-100 text-slate-700 ring-slate-500/20"
                       }`}
                     >
-                      {order.status}
+                      {statusT(order.status)}
                     </span>
                   </td>
 

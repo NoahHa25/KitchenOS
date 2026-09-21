@@ -1,6 +1,12 @@
 import type { Order, OrderStatusUpdate } from "@/types/orders";
 import type { Restaurant } from "@/types/restaurants";
 import type { SalesSummary } from "@/types/sales";
+import type { Ingredient, IngredientUpdate } from "@/types/inventory";
+
+import type {
+  InventoryMovement,
+  InventoryMovementCreate,
+} from "@/types/inventory-movements";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -78,4 +84,99 @@ export async function updateOrderStatus(
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export async function getIngredients(
+  restaurantId: string,
+): Promise<Ingredient[]> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Ingredient[]>(`/ingredients?${params.toString()}`);
+}
+
+export async function getIngredient(
+  restaurantId: string,
+  ingredientId: string,
+): Promise<Ingredient> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Ingredient>(
+    `/ingredients/${ingredientId}?${params.toString()}`,
+  );
+}
+
+export async function getLowStockIngredients(
+  restaurantId: string,
+): Promise<Ingredient[]> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Ingredient[]>(`/ingredients/low-stock?${params.toString()}`);
+}
+
+export async function updateIngredient(
+  restaurantId: string,
+  ingredientId: string,
+  data: IngredientUpdate,
+): Promise<Ingredient> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Ingredient>(
+    `/ingredients/${ingredientId}?${params.toString()}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function deleteIngredient(
+  restaurantId: string,
+  ingredientId: string,
+): Promise<void> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  await apiFetch(`/ingredients/${ingredientId}?${params.toString()}`, {
+    method: "DELETE",
+  });
+}
+
+export async function createInventoryMovement(
+  restaurantId: string,
+  data: InventoryMovementCreate,
+): Promise<InventoryMovement> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<InventoryMovement>(
+    `/inventory-movements?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function getInventoryMovements(
+  restaurantId: string,
+  ingredientId: string,
+): Promise<InventoryMovement[]> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+    ingredient_id: ingredientId,
+  });
+
+  return apiFetch<InventoryMovement[]>(
+    `/inventory-movements?${params.toString()}`,
+  );
 }
