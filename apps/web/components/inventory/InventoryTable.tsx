@@ -15,6 +15,7 @@ import MovementHistory from "./MovementHistory";
 import RestockModal from "./RestockModal";
 import StockBadge from "./StockBadge";
 import WasteModal from "./WasteModal";
+import AdjustmentModal from "./AdjustmentModal";
 
 type InventoryTableProps = {
   restaurantId: string;
@@ -30,6 +31,9 @@ export default function InventoryTable({
 
   const [selected, setSelected] = useState<Ingredient | null>(null);
   const [wasteIngredient, setWasteIngredient] = useState<Ingredient | null>(
+    null,
+  );
+  const [adjustIngredient, setAdjustIngredient] = useState<Ingredient | null>(
     null,
   );
   const [historyIngredient, setHistoryIngredient] = useState<Ingredient | null>(
@@ -90,6 +94,29 @@ export default function InventoryTable({
           ? {
               ...ingredient,
               current_stock: ingredient.current_stock - quantity,
+            }
+          : ingredient,
+      ),
+    );
+  }
+
+  async function handleAdjustment(targetStock: number, reason: string) {
+    if (!adjustIngredient) return;
+
+    await createInventoryMovement(restaurantId, {
+      ingredient_id: adjustIngredient.id,
+      movement_type: "adjustment",
+      quantity: targetStock,
+      unit_cost: Number(adjustIngredient.cost_per_unit),
+      reason,
+    });
+
+    setRows((current) =>
+      current.map((ingredient) =>
+        ingredient.id === adjustIngredient.id
+          ? {
+              ...ingredient,
+              current_stock: targetStock,
             }
           : ingredient,
       ),
@@ -169,6 +196,13 @@ export default function InventoryTable({
                     </button>
 
                     <button
+                      onClick={() => setAdjustIngredient(ingredient)}
+                      className="rounded-lg border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-700 transition hover:bg-amber-50"
+                    >
+                      {t("adjustStock")}
+                    </button>
+
+                    <button
                       onClick={() => setWasteIngredient(ingredient)}
                       className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
                     >
@@ -205,6 +239,17 @@ export default function InventoryTable({
           unitCost={Number(wasteIngredient.cost_per_unit)}
           onClose={() => setWasteIngredient(null)}
           onSubmit={handleWaste}
+        />
+      )}
+
+      {adjustIngredient && (
+        <AdjustmentModal
+          ingredientName={adjustIngredient.name}
+          unit={adjustIngredient.unit}
+          currentStock={adjustIngredient.current_stock}
+          unitCost={Number(adjustIngredient.cost_per_unit)}
+          onClose={() => setAdjustIngredient(null)}
+          onSubmit={handleAdjustment}
         />
       )}
 
