@@ -158,6 +158,20 @@ class FakeSalesService:
         return self.summary
 
 
+class FakeRecipeImpactService:
+    def __init__(
+        self,
+        result=None,
+    ):
+        self.result = result or []
+
+    async def get_low_stock_recipe_impact(
+        self,
+        restaurant_id,
+    ):
+        return self.result
+
+
 def make_service(
     recipes,
     recipe_ingredients,
@@ -165,6 +179,7 @@ def make_service(
     ingredients=None,
     low_stock=None,
     sales_summary=None,
+    recipe_impact=None,
 ):
     ingredient_service = FakeIngredientService(
         ingredients=ingredients,
@@ -173,6 +188,10 @@ def make_service(
 
     sales_service = FakeSalesService(
         summary=sales_summary,
+    )
+
+    recipe_impact_service = FakeRecipeImpactService(
+        result=recipe_impact,
     )
 
     return AssistantService(
@@ -187,6 +206,7 @@ def make_service(
         ),
         ingredient_service=ingredient_service,
         sales_service=sales_service,
+        recipe_impact_service=recipe_impact_service,
     )
 
 
@@ -780,3 +800,82 @@ async def test_sales_summary_returns_zero_when_no_completed_orders():
     assert result["intent"] == "sales_summary"
     assert "Completed orders: 0" in result["answer"]
     assert "Total revenue: 0.00" in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_recipe_impact_returns_affected_recipes():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        recipe_impact=[
+            {
+                "recipe_id": uuid4(),
+                "recipe_name": "Margherita Pizza",
+                "affected_ingredients": [
+                    {
+                        "ingredient_id": uuid4(),
+                        "ingredient_name": "Tomato",
+                        "current_stock": Decimal("0.5"),
+                        "minimum_stock": Decimal("2"),
+                        "unit": "kg",
+                        "required_quantity": Decimal("0.2"),
+                    },
+                ],
+            },
+            {
+                "recipe_id": uuid4(),
+                "recipe_name": "Tomato Pasta",
+                "affected_ingredients": [
+                    {
+                        "ingredient_id": uuid4(),
+                        "ingredient_name": "Tomato",
+                        "current_stock": Decimal("0.5"),
+                        "minimum_stock": Decimal("2"),
+                        "unit": "kg",
+                        "required_quantity": Decimal("0.3"),
+                    },
+                ],
+            },
+        ],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Which recipes are affected by low stock?",
+    )
+
+    assert result["intent"] == "recipe_impact"
+    assert "**Recipes Affected by Low Stock**" in result["answer"]
+    assert "**Margherita Pizza**" in result["answer"]
+    assert "**Tomato Pasta**" in result["answer"]
+    assert "Tomato — 0.5 kg (minimum: 2 kg)" in result["answer"]
+    assert "2 recipes are currently affected by low stock." in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_recipe_impact_question_is_distinct_from_low_stock_question():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        low_stock=[
+            FakeIngredient(
+                name="Tomato",
+                unit="kg",
+                current_stock=Decimal("0.5"),
+                minimum_stock=Decimal("2"),
+                restaurant_id=restaurant_id,
+            ),
+        ],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Which ingredients are running low?",
+    )
+
+    assert result["intent"] == "low_stock"
+    assert "**Low Stock**" in result["answer"]

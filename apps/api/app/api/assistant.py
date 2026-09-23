@@ -13,6 +13,7 @@ from app.services.assistant_service import AssistantService
 from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
 from app.services.sales_service import SalesService
+from app.services.recipe_impact_service import RecipeImpactService
 
 
 router = APIRouter(
@@ -49,6 +50,11 @@ def get_assistant_service(
         food_cost_service=food_cost_service,
         ingredient_service=ingredient_service,
         sales_service=sales_service,
+        recipe_impact_service=RecipeImpactService(
+            recipe_repository=recipe_repository,
+            recipe_ingredient_repository=recipe_ingredient_repository,
+            ingredient_repository=ingredient_repository,
+        ),
     )
 
 

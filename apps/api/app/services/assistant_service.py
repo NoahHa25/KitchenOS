@@ -8,6 +8,7 @@ from app.repositories.recipe_ingredient_repository import (
 from app.repositories.recipe_repository import RecipeRepository
 from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
+from app.services.recipe_impact_service import RecipeImpactService
 from app.services.sales_service import SalesService
 
 
@@ -19,12 +20,14 @@ class AssistantService:
         food_cost_service: FoodCostService,
         ingredient_service: IngredientService,
         sales_service: SalesService,
+        recipe_impact_service: RecipeImpactService,
     ):
         self.recipe_repository = recipe_repository
         self.recipe_ingredient_repository = recipe_ingredient_repository
         self.food_cost_service = food_cost_service
         self.ingredient_service = ingredient_service
         self.sales_service = sales_service
+        self.recipe_impact_service = recipe_impact_service
 
     async def answer(
         self,
@@ -77,6 +80,14 @@ class AssistantService:
                 ),
             }
 
+        if intent == "recipe_impact":
+            return {
+                "intent": intent,
+                "answer": await self._answer_recipe_impact(
+                    restaurant_id=restaurant_id,
+                ),
+            }
+
         if intent == "low_stock":
             return {
                 "intent": intent,
@@ -98,6 +109,7 @@ class AssistantService:
             "answer": (
                 "I can currently help with recipes, ingredients, "
                 "food costs, inventory status, low-stock items, "
+                "recipes affected by low stock, "
                 "and sales summaries."
             ),
         }
@@ -110,6 +122,9 @@ class AssistantService:
 
         if not normalized:
             return "unknown"
+
+        if self._is_recipe_impact_question(normalized):
+            return "recipe_impact"
 
         if self._is_low_stock_question(normalized):
             return "low_stock"
@@ -197,6 +212,28 @@ class AssistantService:
             r"\bstock\s+of\b",
             r"\benough\s+stock\b",
             r"\binventory\s+of\b",
+        ]
+
+        return any(
+            re.search(pattern, query)
+            for pattern in patterns
+        )
+
+    def _is_recipe_impact_question(
+        self,
+        query: str,
+    ) -> bool:
+        patterns = [
+            r"\bwhich\s+recipes?\s+are\s+affected\b",
+            r"\bwhat\s+recipes?\s+are\s+affected\b",
+            r"\bwhich\s+recipes?\s+use\s+.*\b(low|running\s+low)\b",
+            r"\bwhat\s+recipes?\s+use\s+.*\b(low|running\s+low)\b",
+            r"\bwhich\s+menu\s+items?\s+are\s+affected\b",
+            r"\bwhat\s+menu\s+items?\s+are\s+affected\b",
+            r"\bwhich\s+recipes?\s+are\s+affected\s+by\s+low\s+(?:stock|inventory)\b",
+            r"\bwhat\s+recipes?\s+are\s+affected\s+by\s+low\s+(?:stock|inventory)\b",
+            r"\bwhich\s+recipes?\s+use\s+ingredients?\s+that\s+are\s+running\s+low\b",
+            r"\bwhat\s+recipes?\s+use\s+ingredients?\s+that\s+are\s+running\s+low\b",
         ]
 
         return any(
@@ -605,6 +642,65 @@ class AssistantService:
             f"Minimum stock: {minimum_stock} {ingredient.unit}\n"
             f"Status: {status}"
         )
+
+    async def _answer_recipe_impact(
+        self,
+        restaurant_id: UUID,
+    ) -> str:
+        affected_recipes = (
+            await self.recipe_impact_service.get_low_stock_recipe_impact(
+                restaurant_id=restaurant_id,
+            )
+        )
+
+        if not affected_recipes:
+            return (
+                "No recipes are currently affected by low-stock "
+                "ingredients."
+            )
+
+        lines = [
+            "**Recipes Affected by Low Stock**",
+            "",
+        ]
+
+        for recipe in affected_recipes:
+            lines.append(
+                f"**{recipe['recipe_name']}**"
+            )
+
+            for ingredient in recipe["affected_ingredients"]:
+                current_stock = self._format_number(
+                    ingredient["current_stock"],
+                )
+
+                minimum_stock = self._format_number(
+                    ingredient["minimum_stock"],
+                )
+
+                lines.append(
+                    f"• {ingredient['ingredient_name']} — "
+                    f"{current_stock} {ingredient['unit']} "
+                    f"(minimum: {minimum_stock} {ingredient['unit']})"
+                )
+
+            lines.append("")
+
+        recipe_count = len(affected_recipes)
+
+        recipe_word = (
+            "recipe"
+            if recipe_count == 1
+            else "recipes"
+        )
+
+        lines.append(
+            f"{recipe_count} {recipe_word} are currently "
+            "affected by low stock."
+        )
+
+        return "\n".join(lines)
+
     async def _answer_low_stock(
         self,
         restaurant_id: UUID,
