@@ -8,6 +8,16 @@ import type {
   InventoryMovementCreate,
 } from "@/types/inventory-movements";
 
+import type {
+  FoodCost,
+  Recipe,
+  RecipeCreate,
+  RecipeIngredient,
+  RecipeIngredientCreate,
+  RecipeIngredientUpdate,
+  RecipeUpdate,
+} from "@/types/recipes";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -178,5 +188,139 @@ export async function getInventoryMovements(
 
   return apiFetch<InventoryMovement[]>(
     `/inventory-movements?${params.toString()}`,
+  );
+}
+
+export async function getRecipes(restaurantId: string): Promise<Recipe[]> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Recipe[]>(`/recipes?${params.toString()}`);
+}
+
+export async function getRecipe(
+  restaurantId: string,
+  recipeId: string,
+): Promise<Recipe> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Recipe>(`/recipes/${recipeId}?${params.toString()}`);
+}
+
+export async function createRecipe(data: RecipeCreate): Promise<Recipe> {
+  return apiFetch<Recipe>("/recipes", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipe(
+  restaurantId: string,
+  recipeId: string,
+  data: RecipeUpdate,
+): Promise<Recipe> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<Recipe>(`/recipes/${recipeId}?${params.toString()}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecipe(
+  restaurantId: string,
+  recipeId: string,
+): Promise<void> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  await apiFetch(`/recipes/${recipeId}?${params.toString()}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getRecipeIngredients(
+  restaurantId: string,
+  recipeId: string,
+): Promise<RecipeIngredient[]> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<RecipeIngredient[]>(
+    `/recipes/${recipeId}/ingredients?${params.toString()}`,
+  );
+}
+
+export async function addRecipeIngredient(
+  restaurantId: string,
+  recipeId: string,
+  data: RecipeIngredientCreate,
+): Promise<RecipeIngredient> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<RecipeIngredient>(
+    `/recipes/${recipeId}/ingredients?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function updateRecipeIngredient(
+  restaurantId: string,
+  recipeId: string,
+  recipeIngredientId: string,
+  data: RecipeIngredientUpdate,
+): Promise<RecipeIngredient> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<RecipeIngredient>(
+    `/recipes/${recipeId}/ingredients/${recipeIngredientId}?${params.toString()}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    },
+  );
+}
+
+export async function deleteRecipeIngredient(
+  restaurantId: string,
+  recipeId: string,
+  recipeIngredientId: string,
+): Promise<void> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  await apiFetch(
+    `/recipes/${recipeId}/ingredients/${recipeIngredientId}?${params.toString()}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+export async function getRecipeFoodCost(
+  restaurantId: string,
+  recipeId: string,
+): Promise<FoodCost> {
+  const params = new URLSearchParams({
+    restaurant_id: restaurantId,
+  });
+
+  return apiFetch<FoodCost>(
+    `/recipes/${recipeId}/food-cost?${params.toString()}`,
   );
 }
