@@ -6,6 +6,7 @@ from app.api.ingredients import router as ingredient_router
 from app.api.inventory_movements import router as inventory_movement_router
 from app.api.recipes import router as recipe_router
 from app.api.orders import router as order_router
+from app.api import assistant
 
 
 app = FastAPI(
@@ -31,6 +32,7 @@ app.include_router(ingredient_router)
 app.include_router(inventory_movement_router)
 app.include_router(recipe_router)
 app.include_router(order_router)
+app.include_router(assistant.router)
 
 
 @app.get("/health")

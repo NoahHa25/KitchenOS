@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.recipe_ingredient import RecipeIngredient
 
@@ -32,8 +33,12 @@ class RecipeIngredientRepository:
         recipe_ingredient_id: UUID,
     ) -> RecipeIngredient | None:
         result = await self.db.execute(
-            select(RecipeIngredient).where(
+            select(RecipeIngredient)
+            .where(
                 RecipeIngredient.id == recipe_ingredient_id
+            )
+            .options(
+                selectinload(RecipeIngredient.ingredient)
             )
         )
 
@@ -48,6 +53,9 @@ class RecipeIngredientRepository:
             .where(
                 RecipeIngredient.recipe_id == recipe_id
             )
+            .options(
+                selectinload(RecipeIngredient.ingredient)
+            )
             .order_by(RecipeIngredient.id)
         )
 
@@ -59,7 +67,8 @@ class RecipeIngredientRepository:
         ingredient_id: UUID,
     ) -> RecipeIngredient | None:
         result = await self.db.execute(
-            select(RecipeIngredient).where(
+            select(RecipeIngredient)
+            .where(
                 RecipeIngredient.recipe_id == recipe_id,
                 RecipeIngredient.ingredient_id == ingredient_id,
             )

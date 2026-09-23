@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.recipe import Recipe
@@ -102,3 +102,22 @@ class RecipeRepository:
     ) -> None:
         await self.db.delete(recipe)
         await self.db.flush()
+
+    async def find_by_name(
+        self,
+        restaurant_id: UUID,
+        query: str,
+    ) -> Recipe | None:
+        normalized_query = query.strip().lower()
+
+        result = await self.db.execute(
+            select(Recipe)
+            .where(
+                Recipe.restaurant_id == restaurant_id,
+                func.lower(Recipe.name).contains(normalized_query),
+            )
+            .order_by(Recipe.name.asc())
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
