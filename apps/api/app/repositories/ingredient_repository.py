@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ingredient import Ingredient
@@ -15,9 +15,9 @@ class IngredientRepository:
         restaurant_id: UUID,
         name: str,
         unit: str,
-        current_stock: float,
-        minimum_stock: float,
-        cost_per_unit: float,
+        current_stock,
+        minimum_stock,
+        cost_per_unit,
     ) -> Ingredient:
         ingredient = Ingredient(
             restaurant_id=restaurant_id,
@@ -38,8 +38,12 @@ class IngredientRepository:
         restaurant_id: UUID,
     ) -> list[Ingredient]:
         result = await self.db.execute(
-            select(Ingredient).where(
-                Ingredient.restaurant_id == restaurant_id
+            select(Ingredient)
+            .where(
+                Ingredient.restaurant_id == restaurant_id,
+            )
+            .order_by(
+                Ingredient.name.asc(),
             )
         )
 
@@ -51,7 +55,8 @@ class IngredientRepository:
         ingredient_id: UUID,
     ) -> Ingredient | None:
         result = await self.db.execute(
-            select(Ingredient).where(
+            select(Ingredient)
+            .where(
                 Ingredient.id == ingredient_id,
                 Ingredient.restaurant_id == restaurant_id,
             )
@@ -63,11 +68,7 @@ class IngredientRepository:
         self,
         restaurant_id: UUID,
         ingredient_id: UUID,
-        name: str | None = None,
-        unit: str | None = None,
-        current_stock: float | None = None,
-        minimum_stock: float | None = None,
-        cost_per_unit: float | None = None,
+        **values,
     ) -> Ingredient | None:
         ingredient = await self.get_by_id(
             restaurant_id=restaurant_id,
@@ -77,20 +78,9 @@ class IngredientRepository:
         if ingredient is None:
             return None
 
-        if name is not None:
-            ingredient.name = name
-
-        if unit is not None:
-            ingredient.unit = unit
-
-        if current_stock is not None:
-            ingredient.current_stock = current_stock
-
-        if minimum_stock is not None:
-            ingredient.minimum_stock = minimum_stock
-
-        if cost_per_unit is not None:
-            ingredient.cost_per_unit = cost_per_unit
+        for field, value in values.items():
+            if value is not None:
+                setattr(ingredient, field, value)
 
         await self.db.flush()
 
@@ -114,15 +104,40 @@ class IngredientRepository:
 
         return True
 
+    async def find_by_name(
+        self,
+        restaurant_id: UUID,
+        query: str,
+    ) -> Ingredient | None:
+        normalized_query = query.strip().lower()
+
+        result = await self.db.execute(
+            select(Ingredient)
+            .where(
+                Ingredient.restaurant_id == restaurant_id,
+                func.lower(Ingredient.name).contains(normalized_query),
+            )
+            .order_by(
+                Ingredient.name.asc(),
+            )
+            .limit(1)
+        )
+
+        return result.scalar_one_or_none()
+
     async def get_low_stock(
         self,
         restaurant_id: UUID,
     ) -> list[Ingredient]:
         result = await self.db.execute(
-            select(Ingredient).where(
+            select(Ingredient)
+            .where(
                 Ingredient.restaurant_id == restaurant_id,
-                Ingredient.current_stock
-                <= Ingredient.minimum_stock,
+                Ingredient.current_stock <= Ingredient.minimum_stock,
+            )
+            .order_by(
+                Ingredient.current_stock.asc(),
+                Ingredient.name.asc(),
             )
         )
 

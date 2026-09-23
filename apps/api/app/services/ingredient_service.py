@@ -53,11 +53,7 @@ class IngredientService:
         ingredient = await self.repository.update(
             restaurant_id=restaurant_id,
             ingredient_id=ingredient_id,
-            name=data.name,
-            unit=data.unit,
-            current_stock=data.current_stock,
-            minimum_stock=data.minimum_stock,
-            cost_per_unit=data.cost_per_unit,
+            **data.model_dump(exclude_unset=True),
         )
 
         if ingredient is None:
@@ -78,10 +74,12 @@ class IngredientService:
             ingredient_id=ingredient_id,
         )
 
-        if deleted:
-            await self.repository.db.commit()
+        if not deleted:
+            return False
 
-        return deleted
+        await self.repository.db.commit()
+
+        return True
 
     async def get_low_stock(
         self,
@@ -89,4 +87,14 @@ class IngredientService:
     ):
         return await self.repository.get_low_stock(
             restaurant_id=restaurant_id,
+        )
+
+    async def find_ingredient_by_name(
+        self,
+        restaurant_id: UUID,
+        query: str,
+    ):
+        return await self.repository.find_by_name(
+            restaurant_id=restaurant_id,
+            query=query,
         )

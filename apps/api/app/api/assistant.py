@@ -3,16 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.repositories.ingredient_repository import IngredientRepository
+from app.repositories.order_repository import OrderRepository
 from app.repositories.recipe_ingredient_repository import (
     RecipeIngredientRepository,
 )
 from app.repositories.recipe_repository import RecipeRepository
-from app.schemas.assistant import (
-    AssistantRequest,
-    AssistantResponse,
-)
+from app.schemas.assistant import AssistantRequest, AssistantResponse
 from app.services.assistant_service import AssistantService
 from app.services.food_cost_service import FoodCostService
+from app.services.ingredient_service import IngredientService
+from app.services.sales_service import SalesService
 
 
 router = APIRouter(
@@ -22,21 +22,33 @@ router = APIRouter(
 
 
 def get_assistant_service(
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ) -> AssistantService:
+    ingredient_repository = IngredientRepository(db)
     recipe_repository = RecipeRepository(db)
     recipe_ingredient_repository = RecipeIngredientRepository(db)
+    order_repository = OrderRepository(db)
+
+    ingredient_service = IngredientService(
+        repository=ingredient_repository,
+    )
 
     food_cost_service = FoodCostService(
         recipe_repository=recipe_repository,
         recipe_ingredient_repository=recipe_ingredient_repository,
-        ingredient_repository=IngredientRepository(db),
+        ingredient_repository=ingredient_repository,
+    )
+
+    sales_service = SalesService(
+        order_repository=order_repository,
     )
 
     return AssistantService(
         recipe_repository=recipe_repository,
         recipe_ingredient_repository=recipe_ingredient_repository,
         food_cost_service=food_cost_service,
+        ingredient_service=ingredient_service,
+        sales_service=sales_service,
     )
 
 
@@ -44,15 +56,15 @@ def get_assistant_service(
     "",
     response_model=AssistantResponse,
 )
-async def ask_assistant(
+async def assistant(
     data: AssistantRequest,
-    db: AsyncSession = Depends(get_db),
+    service: AssistantService = Depends(
+        get_assistant_service,
+    ),
 ):
-    service = get_assistant_service(db)
-
     result = await service.answer(
         restaurant_id=data.restaurant_id,
-        message=data.query,
+        query=data.query,
     )
 
     return AssistantResponse(**result)
