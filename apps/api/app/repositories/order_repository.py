@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order
+from app.models.recipe import Recipe
 
 
 class OrderRepository:

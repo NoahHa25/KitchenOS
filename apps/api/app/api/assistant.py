@@ -12,6 +12,9 @@ from app.schemas.assistant import AssistantRequest, AssistantResponse
 from app.services.assistant_service import AssistantService
 from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
+from app.services.sales_intelligence_service import (
+    SalesIntelligenceService,
+)
 from app.services.sales_service import SalesService
 from app.services.recipe_impact_service import RecipeImpactService
 from app.services.purchase_recommendation_service import (
@@ -51,6 +54,11 @@ def get_assistant_service(
         order_repository=order_repository,
     )
 
+    sales_intelligence_service = SalesIntelligenceService(
+        order_repository=order_repository,
+        recipe_repository=recipe_repository,
+    )
+
     recipe_impact_service = RecipeImpactService(
         recipe_repository=recipe_repository,
         recipe_ingredient_repository=recipe_ingredient_repository,
@@ -63,6 +71,7 @@ def get_assistant_service(
         food_cost_service=food_cost_service,
         ingredient_service=ingredient_service,
         sales_service=sales_service,
+        sales_intelligence_service=sales_intelligence_service,
         recipe_impact_service=recipe_impact_service,
         purchase_recommendation_service=purchase_recommendation_service,
     )
@@ -84,3 +93,4 @@ async def assistant(
     )
 
     return AssistantResponse(**result)
+

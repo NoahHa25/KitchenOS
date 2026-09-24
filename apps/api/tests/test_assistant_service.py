@@ -158,6 +158,19 @@ class FakeSalesService:
         return self.summary
 
 
+class FakeSalesIntelligenceService:
+    def __init__(
+        self,
+        top_selling_recipes=None,
+    ):
+        self.top_selling_recipes = top_selling_recipes or []
+
+    async def get_top_selling_recipes(
+        self,
+        restaurant_id,
+    ):
+        return self.top_selling_recipes
+
 class FakeRecipeImpactService:
     def __init__(
         self,
@@ -187,6 +200,7 @@ def make_service(
     ingredients=None,
     low_stock=None,
     sales_summary=None,
+    top_selling_recipes=None,
     recipe_impact=None,
     purchase_recommendations=None,
 ):
@@ -197,6 +211,10 @@ def make_service(
 
     sales_service = FakeSalesService(
         summary=sales_summary,
+    )
+
+    sales_intelligence_service = FakeSalesIntelligenceService(
+        top_selling_recipes=top_selling_recipes,
     )
 
     recipe_impact_service = FakeRecipeImpactService(
@@ -219,6 +237,7 @@ def make_service(
         ),
         ingredient_service=ingredient_service,
         sales_service=sales_service,
+        sales_intelligence_service=sales_intelligence_service,
         recipe_impact_service=recipe_impact_service,
         purchase_recommendation_service=purchase_recommendation_service,
     )
@@ -949,3 +968,98 @@ async def test_purchase_recommendations_returns_no_purchases_needed():
 
     assert result["intent"] == "purchase_recommendations"
     assert result["answer"] == "No purchases are needed today."
+
+
+
+@pytest.mark.asyncio
+async def test_top_selling_recipes_returns_ranked_recipes():
+    restaurant_id = uuid4()
+
+    burger_id = uuid4()
+    pizza_id = uuid4()
+    salad_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        top_selling_recipes=[
+            {
+                "recipe_id": burger_id,
+                "recipe_name": "Chicken Burger",
+                "quantity_sold": Decimal("42"),
+            },
+            {
+                "recipe_id": pizza_id,
+                "recipe_name": "Margherita Pizza",
+                "quantity_sold": Decimal("27"),
+            },
+            {
+                "recipe_id": salad_id,
+                "recipe_name": "Caesar Salad",
+                "quantity_sold": Decimal("18"),
+            },
+        ],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="What sold the most?",
+    )
+
+    assert result["intent"] == "top_selling_recipes"
+    assert "**Top Selling Recipes**" in result["answer"]
+
+    assert "Chicken Burger — 42 sold" in result["answer"]
+    assert "Margherita Pizza — 27 sold" in result["answer"]
+    assert "Caesar Salad — 18 sold" in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_top_selling_question_is_distinct_from_sales_summary():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        sales_summary={
+            "total_orders": 5,
+            "total_revenue": Decimal("123.45"),
+        },
+        top_selling_recipes=[
+            {
+                "recipe_id": uuid4(),
+                "recipe_name": "Burger",
+                "quantity_sold": Decimal("10"),
+            },
+        ],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="What sold the most?",
+    )
+
+    assert result["intent"] == "top_selling_recipes"
+    assert "Burger — 10 sold" in result["answer"]
+    assert "Sales Summary" not in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_top_selling_recipes_returns_clear_message_when_no_sales():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        top_selling_recipes=[],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="What are our top dishes?",
+    )
+
+    assert result["intent"] == "top_selling_recipes"
+    assert result["answer"] == (
+        "No completed sales have been recorded yet."
+    )

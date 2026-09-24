@@ -10,10 +10,12 @@ from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
 from app.services.recipe_impact_service import RecipeImpactService
 from app.services.sales_service import SalesService
+from app.services.sales_intelligence_service import (
+    SalesIntelligenceService,
+)
 from app.services.purchase_recommendation_service import (
     PurchaseRecommendationService,
 )
-
 
 class AssistantService:
     def __init__(
@@ -23,14 +25,16 @@ class AssistantService:
         food_cost_service: FoodCostService,
         ingredient_service: IngredientService,
         sales_service: SalesService,
+        sales_intelligence_service: SalesIntelligenceService,
         recipe_impact_service: RecipeImpactService,
         purchase_recommendation_service: PurchaseRecommendationService,
-    ):
+   ):
         self.recipe_repository = recipe_repository
         self.recipe_ingredient_repository = recipe_ingredient_repository
         self.food_cost_service = food_cost_service
         self.ingredient_service = ingredient_service
         self.sales_service = sales_service
+        self.sales_intelligence_service = sales_intelligence_service
         self.recipe_impact_service = recipe_impact_service
         self.purchase_recommendation_service = purchase_recommendation_service
 
@@ -113,6 +117,14 @@ class AssistantService:
                     restaurant_id=restaurant_id,
                 ),
             }
+            
+        if intent == "top_selling_recipes":
+            return {
+                "intent": intent,
+                "answer": await self._answer_top_selling_recipes(
+                    restaurant_id=restaurant_id,
+                ),
+            }
 
         return {
             "intent": "unknown",
@@ -120,7 +132,7 @@ class AssistantService:
                 "I can currently help with recipes, ingredients, "
                 "food costs, inventory status, low-stock items, "
                 "purchase recommendations, recipes affected by low stock, "
-                "and sales summaries."
+                "sales summaries, and top-selling recipes."
             ),
         }
 
@@ -142,6 +154,9 @@ class AssistantService:
 
         if self._is_low_stock_question(normalized):
             return "low_stock"
+
+        if self._is_top_selling_question(normalized):
+            return "top_selling_recipes"
 
         if self._is_sales_question(normalized):
             return "sales_summary"
@@ -286,6 +301,26 @@ class AssistantService:
             r"\bwhat\s+ingredients?\s+are\s+low\b",
             r"\bwhat(?:'s|\s+is)\s+running\s+low\b",
             r"\bwhat(?:'s|\s+is)\s+low\b",
+        ]
+
+        return any(
+            re.search(pattern, query)
+            for pattern in patterns
+        )
+        
+    def _is_top_selling_question(
+        self,
+        query: str,
+    ) -> bool:
+        patterns = [
+            r"\bwhat\s+sold\s+the\s+most\b",
+            r"\bwhat\s+sold\s+best\b",
+            r"\bwhat\s+are\s+our\s+top\s+(?:selling\s+)?(?:dishes|recipes|items)\b",
+            r"\bwhat\s+are\s+our\s+best\s+selling\s+(?:dishes|recipes|items)\b",
+            r"\btop\s+selling\s+(?:dishes|recipes|items)\b",
+            r"\bbest\s+selling\s+(?:dishes|recipes|items)\b",
+            r"\bmost\s+popular\s+(?:dishes|recipes|items)\b",
+            r"\btop\s+(?:dishes|recipes|menu\s+items)\b",
         ]
 
         return any(
@@ -788,6 +823,37 @@ class AssistantService:
             f"Completed orders: {total_orders}\n"
             f"Total revenue: {total_revenue}"
         )
+        
+        
+    async def _answer_top_selling_recipes(
+        self,
+        restaurant_id: UUID,
+    ) -> str:
+        recipes = (
+            await self.sales_intelligence_service.get_top_selling_recipes(
+              restaurant_id=restaurant_id,
+            )
+        )
+
+        if not recipes:
+            return "No completed sales have been recorded yet."
+
+        lines = [
+            "**Top Selling Recipes**",
+            "",
+        ]
+
+        for recipe in recipes:
+            quantity_sold = self._format_number(
+                recipe["quantity_sold"],
+            )
+
+            lines.append(
+                f"• {recipe['recipe_name']} — "
+                f"{quantity_sold} sold"
+            )
+
+        return "\n".join(lines)
 
     async def _handle_purchase_recommendations(
         self,
