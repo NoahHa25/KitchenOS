@@ -10,6 +10,9 @@ from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
 from app.services.recipe_impact_service import RecipeImpactService
 from app.services.sales_service import SalesService
+from app.services.purchase_recommendation_service import (
+    PurchaseRecommendationService,
+)
 
 
 class AssistantService:
@@ -21,6 +24,7 @@ class AssistantService:
         ingredient_service: IngredientService,
         sales_service: SalesService,
         recipe_impact_service: RecipeImpactService,
+        purchase_recommendation_service: PurchaseRecommendationService,
     ):
         self.recipe_repository = recipe_repository
         self.recipe_ingredient_repository = recipe_ingredient_repository
@@ -28,6 +32,7 @@ class AssistantService:
         self.ingredient_service = ingredient_service
         self.sales_service = sales_service
         self.recipe_impact_service = recipe_impact_service
+        self.purchase_recommendation_service = purchase_recommendation_service
 
     async def answer(
         self,
@@ -88,6 +93,11 @@ class AssistantService:
                 ),
             }
 
+        if intent == "purchase_recommendations":
+            return await self._handle_purchase_recommendations(
+                restaurant_id=restaurant_id,
+            )
+
         if intent == "low_stock":
             return {
                 "intent": intent,
@@ -109,7 +119,7 @@ class AssistantService:
             "answer": (
                 "I can currently help with recipes, ingredients, "
                 "food costs, inventory status, low-stock items, "
-                "recipes affected by low stock, "
+                "purchase recommendations, recipes affected by low stock, "
                 "and sales summaries."
             ),
         }
@@ -125,6 +135,10 @@ class AssistantService:
 
         if self._is_recipe_impact_question(normalized):
             return "recipe_impact"
+
+        # Purchase recommendations must be checked before low stock.
+        if self._is_purchase_question(normalized):
+            return "purchase_recommendations"
 
         if self._is_low_stock_question(normalized):
             return "low_stock"
@@ -145,6 +159,24 @@ class AssistantService:
             return "recipe_lookup"
 
         return "unknown"
+
+    def _is_purchase_question(
+        self,
+        query: str,
+    ) -> bool:
+        purchase_keywords = (
+            "what should we buy",
+            "what do we need to buy",
+            "purchase recommendations",
+            "buy today",
+            "shopping list",
+            "restock",
+        )
+
+        return any(
+            keyword in query
+            for keyword in purchase_keywords
+        )
 
     def _is_recipe_question(
         self,
@@ -756,6 +788,55 @@ class AssistantService:
             f"Completed orders: {total_orders}\n"
             f"Total revenue: {total_revenue}"
         )
+
+    async def _handle_purchase_recommendations(
+        self,
+        restaurant_id: UUID,
+    ) -> dict:
+        recommendations = (
+            await self.purchase_recommendation_service.get_purchase_recommendations(
+                restaurant_id
+            )
+        )
+
+        if not recommendations:
+            return {
+                "intent": "purchase_recommendations",
+                "answer": "No purchases are needed today.",
+            }
+
+        lines = [
+            "**Purchase Recommendations**",
+            "",
+        ]
+
+        for item in recommendations:
+            ingredient_name = item["ingredient_name"]
+            purchase_quantity = item["recommended_purchase"]
+            unit = item["unit"]
+
+            current_stock = item.get("current_stock")
+            minimum_stock = item.get("minimum_stock")
+
+            line = (
+                f"• {ingredient_name} — "
+                f"Buy {self._format_number(purchase_quantity)} {unit}"
+            )
+
+            if current_stock is not None and minimum_stock is not None:
+                line += (
+                    f" (Current: "
+                    f"{self._format_number(current_stock)} {unit}, "
+                    f"Target: "
+                    f"{self._format_number(minimum_stock)} {unit})"
+                )
+
+            lines.append(line)
+
+        return {
+            "intent": "purchase_recommendations",
+            "answer": "\n".join(lines),
+        }
 
     def _format_number(
         self,

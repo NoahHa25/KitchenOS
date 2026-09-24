@@ -14,6 +14,9 @@ from app.services.food_cost_service import FoodCostService
 from app.services.ingredient_service import IngredientService
 from app.services.sales_service import SalesService
 from app.services.recipe_impact_service import RecipeImpactService
+from app.services.purchase_recommendation_service import (
+    PurchaseRecommendationService,
+)
 
 
 router = APIRouter(
@@ -34,6 +37,10 @@ def get_assistant_service(
         repository=ingredient_repository,
     )
 
+    purchase_recommendation_service = PurchaseRecommendationService(
+        ingredient_service=ingredient_service,
+    )
+
     food_cost_service = FoodCostService(
         recipe_repository=recipe_repository,
         recipe_ingredient_repository=recipe_ingredient_repository,
@@ -44,17 +51,20 @@ def get_assistant_service(
         order_repository=order_repository,
     )
 
+    recipe_impact_service = RecipeImpactService(
+        recipe_repository=recipe_repository,
+        recipe_ingredient_repository=recipe_ingredient_repository,
+        ingredient_service=ingredient_service,
+    )
+
     return AssistantService(
         recipe_repository=recipe_repository,
         recipe_ingredient_repository=recipe_ingredient_repository,
         food_cost_service=food_cost_service,
         ingredient_service=ingredient_service,
         sales_service=sales_service,
-        recipe_impact_service=RecipeImpactService(
-            recipe_repository=recipe_repository,
-            recipe_ingredient_repository=recipe_ingredient_repository,
-            ingredient_repository=ingredient_repository,
-        ),
+        recipe_impact_service=recipe_impact_service,
+        purchase_recommendation_service=purchase_recommendation_service,
     )
 
 

@@ -172,6 +172,14 @@ class FakeRecipeImpactService:
         return self.result
 
 
+class FakePurchaseRecommendationService:
+    def __init__(self, recommendations=None):
+        self.recommendations = recommendations or []
+
+    async def get_purchase_recommendations(self, restaurant_id):
+        return self.recommendations
+
+
 def make_service(
     recipes,
     recipe_ingredients,
@@ -180,6 +188,7 @@ def make_service(
     low_stock=None,
     sales_summary=None,
     recipe_impact=None,
+    purchase_recommendations=None,
 ):
     ingredient_service = FakeIngredientService(
         ingredients=ingredients,
@@ -192,6 +201,10 @@ def make_service(
 
     recipe_impact_service = FakeRecipeImpactService(
         result=recipe_impact,
+    )
+
+    purchase_recommendation_service = FakePurchaseRecommendationService(
+        recommendations=purchase_recommendations,
     )
 
     return AssistantService(
@@ -207,6 +220,7 @@ def make_service(
         ingredient_service=ingredient_service,
         sales_service=sales_service,
         recipe_impact_service=recipe_impact_service,
+        purchase_recommendation_service=purchase_recommendation_service,
     )
 
 
@@ -879,3 +893,59 @@ async def test_recipe_impact_question_is_distinct_from_low_stock_question():
 
     assert result["intent"] == "low_stock"
     assert "**Low Stock**" in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_purchase_recommendations_returns_shopping_list():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_recommendations=[
+            {
+                "ingredient_name": "Tomato",
+                "recommended_purchase": Decimal("7"),
+                "current_stock": Decimal("3"),
+                "minimum_stock": Decimal("10"),
+                "unit": "kg",
+            },
+            {
+                "ingredient_name": "Cheese",
+                "recommended_purchase": Decimal("2"),
+                "current_stock": Decimal("1"),
+                "minimum_stock": Decimal("3"),
+                "unit": "kg",
+            },
+        ],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="What should we buy today?",
+    )
+
+    assert result["intent"] == "purchase_recommendations"
+    assert "Purchase Recommendations" in result["answer"]
+    assert "Tomato" in result["answer"]
+    assert "Buy 7 kg" in result["answer"]
+    assert "Cheese" in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_purchase_recommendations_returns_no_purchases_needed():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_recommendations=[],
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="What should we buy today?",
+    )
+
+    assert result["intent"] == "purchase_recommendations"
+    assert result["answer"] == "No purchases are needed today."

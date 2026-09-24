@@ -58,7 +58,7 @@ class FailingInventoryMovementRepository:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_order_inventory_transaction_rolls_back_on_failure():
     restaurant_id = uuid4()
     ingredient_id = uuid4()
