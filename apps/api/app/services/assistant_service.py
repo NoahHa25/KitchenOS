@@ -17,18 +17,20 @@ from app.services.purchase_recommendation_service import (
     PurchaseRecommendationService,
 )
 
+
 class AssistantService:
     def __init__(
         self,
-        recipe_repository: RecipeRepository,
-        recipe_ingredient_repository: RecipeIngredientRepository,
-        food_cost_service: FoodCostService,
-        ingredient_service: IngredientService,
-        sales_service: SalesService,
-        sales_intelligence_service: SalesIntelligenceService,
-        recipe_impact_service: RecipeImpactService,
-        purchase_recommendation_service: PurchaseRecommendationService,
-   ):
+        recipe_repository,
+        recipe_ingredient_repository,
+        food_cost_service,
+        ingredient_service,
+        sales_service,
+        sales_intelligence_service,
+        recipe_impact_service,
+        purchase_recommendation_service,
+        purchase_intelligence_service,
+    ):
         self.recipe_repository = recipe_repository
         self.recipe_ingredient_repository = recipe_ingredient_repository
         self.food_cost_service = food_cost_service
@@ -36,7 +38,12 @@ class AssistantService:
         self.sales_service = sales_service
         self.sales_intelligence_service = sales_intelligence_service
         self.recipe_impact_service = recipe_impact_service
-        self.purchase_recommendation_service = purchase_recommendation_service
+        self.purchase_recommendation_service = (
+            purchase_recommendation_service
+        )
+        self.purchase_intelligence_service = (
+            purchase_intelligence_service
+        )
 
     async def answer(
         self,
@@ -97,6 +104,15 @@ class AssistantService:
                 ),
             }
 
+        if intent == "purchase_intelligence":
+            return {
+                "intent": intent,
+                "answer": await self._answer_purchase_intelligence(
+                    restaurant_id=restaurant_id,
+                    query=normalized_query,
+                ),
+            }
+
         if intent == "purchase_recommendations":
             return await self._handle_purchase_recommendations(
                 restaurant_id=restaurant_id,
@@ -117,7 +133,7 @@ class AssistantService:
                     restaurant_id=restaurant_id,
                 ),
             }
-            
+
         if intent == "top_selling_recipes":
             return {
                 "intent": intent,
@@ -131,8 +147,9 @@ class AssistantService:
             "answer": (
                 "I can currently help with recipes, ingredients, "
                 "food costs, inventory status, low-stock items, "
-                "purchase recommendations, recipes affected by low stock, "
-                "sales summaries, and top-selling recipes."
+                "purchase recommendations, purchase intelligence, "
+                "recipes affected by low stock, sales summaries, "
+                "and top-selling recipes."
             ),
         }
 
@@ -147,6 +164,9 @@ class AssistantService:
 
         if self._is_recipe_impact_question(normalized):
             return "recipe_impact"
+
+        if self._is_purchase_intelligence_question(normalized):
+            return "purchase_intelligence"
 
         # Purchase recommendations must be checked before low stock.
         if self._is_purchase_question(normalized):
@@ -174,6 +194,23 @@ class AssistantService:
             return "recipe_lookup"
 
         return "unknown"
+
+    def _is_purchase_intelligence_question(
+        self,
+        query: str,
+    ) -> bool:
+        patterns = [
+            r"\bwhy\s+should\s+we\s+buy\b",
+            r"\bwhy\s+do\s+we\s+need\s+to\s+buy\b",
+            r"\bwhy\s+should\s+we\s+purchase\b",
+            r"\bwhy\s+do\s+we\s+need\s+to\s+purchase\b",
+            r"\bwhy\s+buy\b",
+        ]
+
+        return any(
+            re.search(pattern, query)
+            for pattern in patterns
+        )
 
     def _is_purchase_question(
         self,
@@ -307,7 +344,7 @@ class AssistantService:
             re.search(pattern, query)
             for pattern in patterns
         )
-        
+
     def _is_top_selling_question(
         self,
         query: str,
@@ -388,6 +425,32 @@ class AssistantService:
             r"stock\s+(?:of\s+)?(.+)",
             r"enough\s+stock\s+(?:of\s+)?(.+)",
             r"inventory\s+(?:of\s+)?(.+)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(
+                pattern,
+                query,
+                re.IGNORECASE,
+            )
+
+            if match:
+                return self._clean_query_value(
+                    match.group(1),
+                )
+
+        return self._clean_query_value(query)
+
+    def _extract_purchase_intelligence_query(
+        self,
+        query: str,
+    ) -> str:
+        patterns = [
+            r"why\s+should\s+we\s+buy\s+(.+)",
+            r"why\s+do\s+we\s+need\s+to\s+buy\s+(.+)",
+            r"why\s+should\s+we\s+purchase\s+(.+)",
+            r"why\s+do\s+we\s+need\s+to\s+purchase\s+(.+)",
+            r"why\s+buy\s+(.+)",
         ]
 
         for pattern in patterns:
@@ -679,9 +742,11 @@ class AssistantService:
             )
         )
 
-        ingredient = await self.ingredient_service.find_ingredient_by_name(
-            restaurant_id=restaurant_id,
-            query=normalized_ingredient_query,
+        ingredient = (
+            await self.ingredient_service.find_ingredient_by_name(
+                restaurant_id=restaurant_id,
+                query=normalized_ingredient_query,
+            )
         )
 
         if ingredient is None:
@@ -823,15 +888,14 @@ class AssistantService:
             f"Completed orders: {total_orders}\n"
             f"Total revenue: {total_revenue}"
         )
-        
-        
+
     async def _answer_top_selling_recipes(
         self,
         restaurant_id: UUID,
     ) -> str:
         recipes = (
             await self.sales_intelligence_service.get_top_selling_recipes(
-              restaurant_id=restaurant_id,
+                restaurant_id=restaurant_id,
             )
         )
 
@@ -855,12 +919,124 @@ class AssistantService:
 
         return "\n".join(lines)
 
+    async def _answer_purchase_intelligence(
+        self,
+        restaurant_id: UUID,
+        query: str,
+    ) -> str:
+        ingredient_query = (
+            self._extract_purchase_intelligence_query(
+                query,
+            )
+        )
+
+        result = (
+            await self.purchase_intelligence_service.get_purchase_reason(
+                restaurant_id=restaurant_id,
+                ingredient_name=ingredient_query,
+            )
+        )
+
+        if result is None:
+            return (
+                f'I couldn\'t find an ingredient matching '
+                f'"{ingredient_query}".'
+            )
+
+        ingredient_name = result["ingredient_name"]
+
+        current_stock = self._format_number(
+            result["current_stock"],
+        )
+
+        minimum_stock = self._format_number(
+            result["minimum_stock"],
+        )
+
+        recommended_purchase = self._format_number(
+            result["recommended_purchase"],
+        )
+
+        unit = result["unit"]
+
+        if result["recommended_purchase"] <= 0:
+            return (
+                f"**{ingredient_name}** does not currently need "
+                "to be purchased.\n\n"
+                f"Current stock: {current_stock} {unit}\n"
+                f"Minimum stock: {minimum_stock} {unit}\n\n"
+                "This ingredient is not currently on the "
+                "purchase recommendation list."
+            )
+
+        lines = [
+            f"**{ingredient_name} — Purchase Reason**",
+            "",
+            f"Current stock: {current_stock} {unit}",
+            f"Minimum stock: {minimum_stock} {unit}",
+            (
+                f"Recommended purchase: "
+                f"{recommended_purchase} {unit}"
+            ),
+            "",
+            (
+                f"{ingredient_name} is below the minimum "
+                "stock level."
+            ),
+        ]
+
+        affected_recipes = result.get(
+            "affected_recipes",
+            [],
+        )
+
+        if affected_recipes:
+            recipe_count = len(affected_recipes)
+
+            if recipe_count == 1:
+                lines.extend(
+                    [
+                        "",
+                        "It is used in 1 low-stock affected recipe.",
+                    ]
+                )
+            else:
+                lines.extend(
+                    [
+                        "",
+                        (
+                            f"It is used in {recipe_count} "
+                            "low-stock affected recipes."
+                        ),
+                    ]
+                )
+
+            lines.extend(
+                [
+                    "",
+                    "**Affected recipes:**",
+                ]
+            )
+
+            for recipe in affected_recipes:
+                quantity_sold = self._format_number(
+                    recipe["quantity_sold"],
+                )
+
+                lines.append(
+                    f"• {recipe['recipe_name']} — "
+                    f"{quantity_sold} sold."
+                )
+
+        return "\n".join(lines)
+
     async def _handle_purchase_recommendations(
         self,
         restaurant_id: UUID,
     ) -> dict:
         recommendations = (
-            await self.purchase_recommendation_service.get_purchase_recommendations(
+            await self.purchase_recommendation_service
+            .get_purchase_recommendations(
                 restaurant_id
             )
         )

@@ -203,6 +203,7 @@ def make_service(
     top_selling_recipes=None,
     recipe_impact=None,
     purchase_recommendations=None,
+    purchase_intelligence=None,
 ):
     ingredient_service = FakeIngredientService(
         ingredients=ingredients,
@@ -224,6 +225,10 @@ def make_service(
     purchase_recommendation_service = FakePurchaseRecommendationService(
         recommendations=purchase_recommendations,
     )
+    
+    purchase_intelligence_service = FakePurchaseIntelligenceService(
+        result=purchase_intelligence,
+    )
 
     return AssistantService(
         recipe_repository=FakeRecipeRepository(
@@ -240,8 +245,20 @@ def make_service(
         sales_intelligence_service=sales_intelligence_service,
         recipe_impact_service=recipe_impact_service,
         purchase_recommendation_service=purchase_recommendation_service,
+        purchase_intelligence_service=purchase_intelligence_service,
     )
 
+
+class FakePurchaseIntelligenceService:
+    def __init__(self, result=None):
+        self.result = result
+
+    async def get_purchase_reason(
+        self,
+        restaurant_id,
+        ingredient_name,
+    ):
+        return self.result
 
 @pytest.mark.asyncio
 async def test_recipe_lookup_returns_recipe_and_ingredients():
@@ -1062,4 +1079,193 @@ async def test_top_selling_recipes_returns_clear_message_when_no_sales():
     assert result["intent"] == "top_selling_recipes"
     assert result["answer"] == (
         "No completed sales have been recorded yet."
+    )
+    
+    
+    
+@pytest.mark.asyncio
+async def test_purchase_intelligence_detects_why_should_buy_question():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence={
+            "ingredient_name": "Chicken",
+            "current_stock": Decimal("2"),
+            "minimum_stock": Decimal("10"),
+            "recommended_purchase": Decimal("8"),
+            "unit": "kg",
+            "affected_recipes": [],
+        },
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why should we buy chicken?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert "**Chicken — Purchase Reason**" in result["answer"]
+    assert "Current stock: 2 kg" in result["answer"]
+    assert "Minimum stock: 10 kg" in result["answer"]
+    assert "Recommended purchase: 8 kg" in result["answer"]
+    assert "Chicken is below the minimum stock level." in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_purchase_intelligence_includes_affected_recipe_evidence():
+    restaurant_id = uuid4()
+
+    recipe_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence={
+            "ingredient_name": "Chicken",
+            "current_stock": Decimal("2"),
+            "minimum_stock": Decimal("10"),
+            "recommended_purchase": Decimal("8"),
+            "unit": "kg",
+            "affected_recipes": [
+                {
+                    "recipe_id": recipe_id,
+                    "recipe_name": "Chicken Burger",
+                    "quantity_sold": Decimal("42"),
+                },
+            ],
+        },
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why should we buy chicken?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert (
+        "It is used in 1 low-stock affected recipe."
+        in result["answer"]
+    )
+    assert "Chicken Burger — 42 sold." in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_purchase_intelligence_supports_multiple_affected_recipes():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence={
+            "ingredient_name": "Chicken",
+            "current_stock": Decimal("1"),
+            "minimum_stock": Decimal("8"),
+            "recommended_purchase": Decimal("7"),
+            "unit": "kg",
+            "affected_recipes": [
+                {
+                    "recipe_id": uuid4(),
+                    "recipe_name": "Chicken Burger",
+                    "quantity_sold": Decimal("42"),
+                },
+                {
+                    "recipe_id": uuid4(),
+                    "recipe_name": "Chicken Pasta",
+                    "quantity_sold": Decimal("18"),
+                },
+            ],
+        },
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why do we need to buy chicken?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert (
+        "It is used in 2 low-stock affected recipes."
+        in result["answer"]
+    )
+    assert "Chicken Burger — 42 sold." in result["answer"]
+    assert "Chicken Pasta — 18 sold." in result["answer"]
+
+
+@pytest.mark.asyncio
+async def test_purchase_intelligence_returns_clear_message_when_ingredient_not_found():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence=None,
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why should we buy truffles?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert (
+        result["answer"]
+        == 'I couldn\'t find an ingredient matching "truffles".'
+    )
+
+
+@pytest.mark.asyncio
+async def test_purchase_intelligence_returns_no_purchase_needed_when_not_recommended():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence={
+            "ingredient_name": "Tomato",
+            "current_stock": Decimal("8"),
+            "minimum_stock": Decimal("5"),
+            "recommended_purchase": Decimal("0"),
+            "unit": "kg",
+            "affected_recipes": [],
+        },
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why should we buy tomato?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert "**Tomato**" in result["answer"]
+    assert "Current stock: 8 kg" in result["answer"]
+    assert "Minimum stock: 5 kg" in result["answer"]
+    assert (
+        "This ingredient is not currently on the "
+        "purchase recommendation list."
+        in result["answer"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_purchase_intelligence_is_scoped_to_restaurant():
+    restaurant_id = uuid4()
+    other_restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        purchase_intelligence=None,
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="Why should we buy chicken?",
+    )
+
+    assert result["intent"] == "purchase_intelligence"
+    assert (
+        result["answer"]
+        == 'I couldn\'t find an ingredient matching "chicken".'
     )

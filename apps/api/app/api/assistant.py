@@ -20,6 +20,12 @@ from app.services.recipe_impact_service import RecipeImpactService
 from app.services.purchase_recommendation_service import (
     PurchaseRecommendationService,
 )
+from app.services.purchase_intelligence_service import (
+    PurchaseIntelligenceService,
+)
+
+
+
 
 
 router = APIRouter(
@@ -64,6 +70,15 @@ def get_assistant_service(
         recipe_ingredient_repository=recipe_ingredient_repository,
         ingredient_service=ingredient_service,
     )
+    
+    purchase_intelligence_service = PurchaseIntelligenceService(
+        ingredient_service=ingredient_service,
+        purchase_recommendation_service=(
+          purchase_recommendation_service
+       ),
+        recipe_impact_service=recipe_impact_service,
+        sales_intelligence_service=sales_intelligence_service,
+    )
 
     return AssistantService(
         recipe_repository=recipe_repository,
@@ -74,6 +89,7 @@ def get_assistant_service(
         sales_intelligence_service=sales_intelligence_service,
         recipe_impact_service=recipe_impact_service,
         purchase_recommendation_service=purchase_recommendation_service,
+        purchase_intelligence_service=purchase_intelligence_service,
     )
 
 
