@@ -30,6 +30,7 @@ class AssistantService:
         recipe_impact_service,
         purchase_recommendation_service,
         purchase_intelligence_service,
+        demand_forecast_service,
     ):
         self.recipe_repository = recipe_repository
         self.recipe_ingredient_repository = recipe_ingredient_repository
@@ -43,6 +44,9 @@ class AssistantService:
         )
         self.purchase_intelligence_service = (
             purchase_intelligence_service
+        )
+        self.demand_forecast_service = (
+            demand_forecast_service
         )
 
     async def answer(
@@ -113,6 +117,15 @@ class AssistantService:
                 ),
             }
 
+        if intent == "demand_forecast":
+            return {
+                "intent": intent,
+                "answer": await self._answer_demand_forecast(
+                    restaurant_id=restaurant_id,
+                    query=normalized_query,
+                ),
+            }
+
         if intent == "purchase_recommendations":
             return await self._handle_purchase_recommendations(
                 restaurant_id=restaurant_id,
@@ -148,8 +161,8 @@ class AssistantService:
                 "I can currently help with recipes, ingredients, "
                 "food costs, inventory status, low-stock items, "
                 "purchase recommendations, purchase intelligence, "
-                "recipes affected by low stock, sales summaries, "
-                "and top-selling recipes."
+                "demand forecasts, recipes affected by low stock, "
+                "sales summaries, and top-selling recipes."
             ),
         }
 
@@ -164,6 +177,9 @@ class AssistantService:
 
         if self._is_recipe_impact_question(normalized):
             return "recipe_impact"
+
+        if self._is_demand_forecast_question(normalized):
+            return "demand_forecast"
 
         if self._is_purchase_intelligence_question(normalized):
             return "purchase_intelligence"
@@ -194,6 +210,27 @@ class AssistantService:
             return "recipe_lookup"
 
         return "unknown"
+
+    def _is_demand_forecast_question(
+        self,
+        query: str,
+    ) -> bool:
+        patterns = [
+            r"\bhow\s+much\s+.+\s+will\s+we\s+need\b",
+            r"\bhow\s+much\s+.+\s+will\s+we\s+need\s+to\s+buy\b",
+            r"\bhow\s+much\s+.+\s+will\s+we\s+use\b",
+            r"\bhow\s+much\s+.+\s+do\s+we\s+need\b",
+            r"\bhow\s+much\s+.+\s+should\s+we\s+buy\b",
+            r"\bhow\s+much\s+.+\s+will\s+we\s+use\s+in\b",
+            r"\bhow\s+much\s+.+\s+do\s+we\s+need\s+for\b",
+            r"\bforecast\s+(?:for|of)\b",
+            r"\bdemand\s+forecast\b",
+        ]
+
+        return any(
+            re.search(pattern, query)
+            for pattern in patterns
+        )
 
     def _is_purchase_intelligence_question(
         self,
@@ -451,6 +488,36 @@ class AssistantService:
             r"why\s+should\s+we\s+purchase\s+(.+)",
             r"why\s+do\s+we\s+need\s+to\s+purchase\s+(.+)",
             r"why\s+buy\s+(.+)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(
+                pattern,
+                query,
+                re.IGNORECASE,
+            )
+
+            if match:
+                return self._clean_query_value(
+                    match.group(1),
+                )
+
+        return self._clean_query_value(query)
+
+    def _extract_demand_forecast_query(
+        self,
+        query: str,
+    ) -> str:
+        patterns = [
+            r"how\s+much\s+(.+?)\s+will\s+we\s+need\s+to\s+buy",
+            r"how\s+much\s+(.+?)\s+will\s+we\s+need",
+            r"how\s+much\s+(.+?)\s+will\s+we\s+use",
+            r"how\s+much\s+(.+?)\s+do\s+we\s+need",
+            r"how\s+much\s+(.+?)\s+should\s+we\s+buy",
+            r"how\s+much\s+(.+?)\s+will\s+we\s+use\s+in",
+            r"how\s+much\s+(.+?)\s+do\s+we\s+need\s+for",
+            r"forecast\s+(?:for|of)\s+(.+)",
+            r"demand\s+forecast\s+(?:for|of)\s+(.+)",
         ]
 
         for pattern in patterns:
@@ -1029,6 +1096,70 @@ class AssistantService:
                 )
 
         return "\n".join(lines)
+
+    async def _answer_demand_forecast(
+        self,
+        restaurant_id: UUID,
+        query: str,
+    ) -> str:
+        ingredient_query = (
+            self._extract_demand_forecast_query(
+                query,
+            )
+        )
+
+        result = (
+            await self.demand_forecast_service.get_forecast(
+                restaurant_id=restaurant_id,
+                ingredient_name=ingredient_query,
+            )
+        )
+
+        if result is None:
+            return (
+                f'I couldn\'t find an ingredient matching '
+                f'"{ingredient_query}".'
+            )
+
+        ingredient_name = result["ingredient_name"]
+        unit = result["unit"]
+
+        average_daily_usage = self._format_number(
+            result["average_daily_usage"],
+        )
+
+        forecast_days = result["forecast_days"]
+
+        forecasted_usage = self._format_number(
+            result["forecasted_usage"],
+        )
+
+        current_stock = self._format_number(
+            result["current_stock"],
+        )
+
+        safety_stock = self._format_number(
+            result["safety_stock"],
+        )
+
+        suggested_purchase = self._format_number(
+            result["suggested_purchase"],
+        )
+
+        return (
+            f"**{ingredient_name} — Demand Forecast**\n\n"
+            f"Average daily usage: "
+            f"{average_daily_usage} {unit}/day\n"
+            f"Forecast period: {forecast_days} days\n"
+            f"Forecasted usage: "
+            f"{forecasted_usage} {unit}\n"
+            f"Current stock: "
+            f"{current_stock} {unit}\n"
+            f"Safety stock: "
+            f"{safety_stock} {unit}\n"
+            f"Suggested purchase: "
+            f"{suggested_purchase} {unit}"
+        )
 
     async def _handle_purchase_recommendations(
         self,

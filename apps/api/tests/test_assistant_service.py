@@ -204,6 +204,7 @@ def make_service(
     recipe_impact=None,
     purchase_recommendations=None,
     purchase_intelligence=None,
+    demand_forecast=None,
 ):
     ingredient_service = FakeIngredientService(
         ingredients=ingredients,
@@ -229,6 +230,10 @@ def make_service(
     purchase_intelligence_service = FakePurchaseIntelligenceService(
         result=purchase_intelligence,
     )
+    
+    demand_forecast_service = FakeDemandForecastService(
+        result=demand_forecast,
+    )
 
     return AssistantService(
         recipe_repository=FakeRecipeRepository(
@@ -246,8 +251,23 @@ def make_service(
         recipe_impact_service=recipe_impact_service,
         purchase_recommendation_service=purchase_recommendation_service,
         purchase_intelligence_service=purchase_intelligence_service,
+        demand_forecast_service=demand_forecast_service,
     )
 
+
+class FakeDemandForecastService:
+    def __init__(self, result=None):
+        self.result = result
+
+    async def get_forecast(
+        self,
+        restaurant_id,
+        ingredient_name,
+        forecast_days=7,
+        safety_stock=Decimal("0"),
+        lookback_days=30,
+    ):
+        return self.result
 
 class FakePurchaseIntelligenceService:
     def __init__(self, result=None):
@@ -1269,3 +1289,38 @@ async def test_purchase_intelligence_is_scoped_to_restaurant():
         result["answer"]
         == 'I couldn\'t find an ingredient matching "chicken".'
     )
+    
+    
+@pytest.mark.asyncio
+async def test_demand_forecast_answers_how_much_ingredient_we_need():
+    restaurant_id = uuid4()
+
+    service = make_service(
+        recipes=[],
+        recipe_ingredients={},
+        demand_forecast={
+            "ingredient_id": uuid4(),
+            "ingredient_name": "Chicken",
+            "current_stock": Decimal("5"),
+            "unit": "kg",
+            "average_daily_usage": Decimal("2"),
+            "forecast_days": 7,
+            "forecasted_usage": Decimal("14"),
+            "safety_stock": Decimal("5"),
+            "suggested_purchase": Decimal("14"),
+        },
+    )
+
+    result = await service.answer(
+        restaurant_id=restaurant_id,
+        query="How much chicken will we need?",
+    )
+
+    assert result["intent"] == "demand_forecast"
+    assert "**Chicken — Demand Forecast**" in result["answer"]
+    assert "Average daily usage: 2 kg/day" in result["answer"]
+    assert "Forecast period: 7 days" in result["answer"]
+    assert "Forecasted usage: 14 kg" in result["answer"]
+    assert "Current stock: 5 kg" in result["answer"]
+    assert "Safety stock: 5 kg" in result["answer"]
+    assert "Suggested purchase: 14 kg" in result["answer"]
