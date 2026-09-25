@@ -6,6 +6,8 @@ from app.models.recipe import Recipe
 from app.models.recipe_ingredient import RecipeIngredient
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.supplier import Supplier
+
 
 __all__ = [
     "Base",
@@ -16,4 +18,5 @@ __all__ = [
     "RecipeIngredient",
     "Order",
     "OrderItem",
+    "Supplier",
 ]

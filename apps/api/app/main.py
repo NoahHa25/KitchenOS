@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.restaurants import router as restaurant_router
 from app.api.ingredients import router as ingredient_router
+from app.api.suppliers import router as supplier_router
 from app.api.inventory_movements import router as inventory_movement_router
 from app.api.recipes import router as recipe_router
 from app.api.orders import router as order_router
@@ -29,6 +30,7 @@ app.add_middleware(
 
 app.include_router(restaurant_router)
 app.include_router(ingredient_router)
+app.include_router(supplier_router)
 app.include_router(inventory_movement_router)
 app.include_router(recipe_router)
 app.include_router(order_router)
