@@ -7,6 +7,8 @@ from app.models.recipe_ingredient import RecipeIngredient
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.supplier import Supplier
+from app.models.purchase_order import PurchaseOrder
+from app.models.purchase_order_item import PurchaseOrderItem
 
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "Order",
     "OrderItem",
     "Supplier",
+    "PurchaseOrder",
+    "PurchaseOrderItem",
 ]
