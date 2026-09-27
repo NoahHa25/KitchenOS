@@ -50,8 +50,11 @@ class DemandForecastService:
         )
 
         now = datetime.now(timezone.utc)
+
         lookback_start = (
-            now - timedelta(days=lookback_days)
+            now
+            - timedelta(days=lookback_days)
+            - timedelta(seconds=1)
         )
 
         total_usage = Decimal("0")
