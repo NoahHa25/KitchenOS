@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -246,6 +247,7 @@ class PurchaseOrderService:
                 )
 
             purchase_order.status = PurchaseOrderStatus.RECEIVED
+            purchase_order.received_at = datetime.now(UTC)
 
             await self.purchase_order_repository.db.flush()
             await self.purchase_order_repository.db.commit()

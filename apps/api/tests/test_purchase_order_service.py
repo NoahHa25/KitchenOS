@@ -1,16 +1,32 @@
+from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+
 from fastapi import HTTPException
 
-from app.models.purchase_order import PurchaseOrderStatus
+from app.models.ingredient import Ingredient
+from app.models.purchase_order import (
+    PurchaseOrder,
+    PurchaseOrderStatus,
+)
+from app.models.purchase_order_item import PurchaseOrderItem
+from app.models.restaurant import Restaurant
+from app.models.supplier import Supplier
+from app.repositories.ingredient_repository import IngredientRepository
+from app.repositories.inventory_movement_repository import (
+    InventoryMovementRepository,
+)
+from app.repositories.purchase_order_repository import (
+    PurchaseOrderRepository,
+)
+from app.repositories.supplier_repository import SupplierRepository
 from app.schemas.purchase_order import (
     PurchaseOrderCreate,
     PurchaseOrderItemCreate,
 )
 from app.services.purchase_order_service import PurchaseOrderService
-
 
 class FakeDB:
     def __init__(self):
@@ -960,6 +976,88 @@ async def test_receive_purchase_order_increases_stock():
 
     assert db.commit_count == 3
     assert len(inventory_movement_repository.movements) == 1
+    
+    
+
+@pytest.mark.anyio
+async def test_receive_purchase_order_sets_received_at(
+    db_session,
+):
+    restaurant = Restaurant(
+        name="Test Restaurant",
+        slug=f"test-{uuid4()}",
+    )
+    db_session.add(restaurant)
+    await db_session.flush()
+
+    supplier = Supplier(
+        restaurant_id=restaurant.id,
+        name="Test Supplier",
+    )
+    db_session.add(supplier)
+    await db_session.flush()
+
+    ingredient = Ingredient(
+        restaurant_id=restaurant.id,
+        name="Tomato",
+        unit="kg",
+        current_stock=Decimal("10"),
+        minimum_stock=Decimal("2"),
+        cost_per_unit=Decimal("3.00"),
+    )
+    db_session.add(ingredient)
+    await db_session.flush()
+
+    expected_delivery = datetime.now(UTC)
+
+    purchase_order = PurchaseOrder(
+        restaurant_id=restaurant.id,
+        supplier_id=supplier.id,
+        status=PurchaseOrderStatus.SENT,
+        expected_delivery=expected_delivery,
+    )
+    db_session.add(purchase_order)
+    await db_session.flush()
+
+    item = PurchaseOrderItem(
+        purchase_order_id=purchase_order.id,
+        ingredient_id=ingredient.id,
+        quantity=Decimal("5"),
+        unit_cost=Decimal("4.00"),
+        total_cost=Decimal("20.00"),
+    )
+    db_session.add(item)
+    await db_session.flush()
+
+    service = PurchaseOrderService(
+        purchase_order_repository=PurchaseOrderRepository(
+            db_session,
+        ),
+        supplier_repository=SupplierRepository(
+            db_session,
+        ),
+        ingredient_repository=IngredientRepository(
+            db_session,
+        ),
+        inventory_movement_repository=InventoryMovementRepository(
+            db_session,
+        ),
+    )
+
+    before_receive = datetime.now(UTC)
+
+    result = await service.receive_purchase_order(
+        restaurant_id=restaurant.id,
+        purchase_order_id=purchase_order.id,
+    )
+
+    after_receive = datetime.now(UTC)
+
+    assert result is not None
+    assert result.status == PurchaseOrderStatus.RECEIVED
+    assert result.received_at is not None
+
+    assert before_receive <= result.received_at <= after_receive
 
 
 @pytest.mark.asyncio

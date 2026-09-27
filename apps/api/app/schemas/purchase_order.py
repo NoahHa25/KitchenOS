@@ -55,6 +55,7 @@ class PurchaseOrderResponse(BaseModel):
     supplier_id: UUID
     status: PurchaseOrderStatus
     expected_delivery: datetime | None
+    received_at: datetime | None
     notes: str | None
     created_at: datetime
     updated_at: datetime

@@ -45,6 +45,10 @@ class PurchaseOrder(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    received_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     notes: Mapped[str | None] = mapped_column(
         Text,
