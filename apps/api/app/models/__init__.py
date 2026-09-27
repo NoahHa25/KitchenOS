@@ -9,6 +9,8 @@ from app.models.order_item import OrderItem
 from app.models.supplier import Supplier
 from app.models.purchase_order import PurchaseOrder
 from app.models.purchase_order_item import PurchaseOrderItem
+from app.models.restaurant_memory import RestaurantMemory
+from app.models.restaurant_insight import RestaurantInsight
 
 
 __all__ = [
@@ -23,4 +25,6 @@ __all__ = [
     "Supplier",
     "PurchaseOrder",
     "PurchaseOrderItem",
+    "RestaurantMemory",
+    "RestaurantInsight",
 ]

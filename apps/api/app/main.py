@@ -10,6 +10,7 @@ from app.api.orders import router as order_router
 from app.api.purchase_orders import router as purchase_order_router
 from app.api.restaurant_memories import router as restaurant_memory_router
 from app.api import assistant
+from app.api.restaurant_brain import router as restaurant_brain_router
 
 
 app = FastAPI(
@@ -39,6 +40,7 @@ app.include_router(order_router)
 app.include_router(purchase_order_router)
 app.include_router(assistant.router)
 app.include_router(restaurant_memory_router)
+app.include_router(restaurant_brain_router)
 
 
 @app.get("/health")

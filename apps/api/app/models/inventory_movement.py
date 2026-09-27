@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
@@ -48,4 +48,6 @@ class InventoryMovement(Base):
         default=datetime.utcnow,
         nullable=False,
     )
+
+    ingredient = relationship("Ingredient")
 
