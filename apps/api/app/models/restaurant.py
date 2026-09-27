@@ -10,6 +10,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.recipe import Recipe
+    from app.models.restaurant_memory import RestaurantMemory
 
 
 class Restaurant(Base):
@@ -48,6 +49,12 @@ class Restaurant(Base):
 
     recipes: Mapped[list["Recipe"]] = relationship(
         "Recipe",
+        back_populates="restaurant",
+        cascade="all, delete-orphan",
+    )
+
+    memories: Mapped[list["RestaurantMemory"]] = relationship(
+        "RestaurantMemory",
         back_populates="restaurant",
         cascade="all, delete-orphan",
     )

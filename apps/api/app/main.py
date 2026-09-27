@@ -8,6 +8,7 @@ from app.api.inventory_movements import router as inventory_movement_router
 from app.api.recipes import router as recipe_router
 from app.api.orders import router as order_router
 from app.api.purchase_orders import router as purchase_order_router
+from app.api.restaurant_memories import router as restaurant_memory_router
 from app.api import assistant
 
 
@@ -37,6 +38,7 @@ app.include_router(recipe_router)
 app.include_router(order_router)
 app.include_router(purchase_order_router)
 app.include_router(assistant.router)
+app.include_router(restaurant_memory_router)
 
 
 @app.get("/health")
