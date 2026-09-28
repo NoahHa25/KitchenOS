@@ -28,6 +28,36 @@ class RestaurantMemoryService:
             tags=tags,
         )
 
+    async def record_memory(
+        self,
+        *,
+        restaurant_id: UUID,
+        memory_type: str,
+        title: str,
+        description: str,
+        importance: str = "medium",
+        tags: str | None = None,
+    ) -> RestaurantMemory:
+        """
+        Record an operational event in Restaurant Memory.
+
+        This is the canonical entry point for internal KitchenOS
+        services such as Orders, Inventory, Suppliers, and
+        Purchase Orders.
+
+        Individual events are intentionally stored separately so
+        Restaurant Brain can later detect recurring patterns.
+        """
+
+        return await self.create_memory(
+            restaurant_id=restaurant_id,
+            memory_type=memory_type,
+            title=title,
+            description=description,
+            importance=importance,
+            tags=tags,
+        )
+
     async def get_memory(
         self,
         *,

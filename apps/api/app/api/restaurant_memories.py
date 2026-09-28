@@ -10,11 +10,20 @@ from app.schemas.restaurant_memory import (
     RestaurantMemoryResponse,
     RestaurantMemoryUpdate,
 )
+from app.services.restaurant_memory_service import RestaurantMemoryService
+
 
 router = APIRouter(
     prefix="/memories",
     tags=["Restaurant Memory"],
 )
+
+
+def get_memory_service(
+    db: AsyncSession,
+) -> RestaurantMemoryService:
+    repository = RestaurantMemoryRepository(db)
+    return RestaurantMemoryService(repository)
 
 
 @router.post(
@@ -27,9 +36,9 @@ async def create_memory(
     payload: RestaurantMemoryCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    repository = RestaurantMemoryRepository(db)
+    service = get_memory_service(db)
 
-    memory = await repository.create(
+    memory = await service.record_memory(
         restaurant_id=restaurant_id,
         memory_type=payload.memory_type,
         title=payload.title,
@@ -51,9 +60,9 @@ async def list_memories(
     restaurant_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    repository = RestaurantMemoryRepository(db)
+    service = get_memory_service(db)
 
-    return await repository.list(
+    return await service.list_memories(
         restaurant_id=restaurant_id,
     )
 
@@ -67,9 +76,9 @@ async def get_memory(
     restaurant_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    repository = RestaurantMemoryRepository(db)
+    service = get_memory_service(db)
 
-    memory = await repository.get_by_id(
+    memory = await service.get_memory(
         restaurant_id=restaurant_id,
         memory_id=memory_id,
     )
@@ -93,9 +102,9 @@ async def update_memory(
     payload: RestaurantMemoryUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    repository = RestaurantMemoryRepository(db)
+    service = get_memory_service(db)
 
-    memory = await repository.get_by_id(
+    memory = await service.get_memory(
         restaurant_id=restaurant_id,
         memory_id=memory_id,
     )
@@ -106,7 +115,7 @@ async def update_memory(
             detail="Restaurant memory not found",
         )
 
-    updated_memory = await repository.update(
+    updated_memory = await service.update_memory(
         memory,
         title=payload.title,
         description=payload.description,
@@ -129,9 +138,9 @@ async def delete_memory(
     restaurant_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    repository = RestaurantMemoryRepository(db)
+    service = get_memory_service(db)
 
-    memory = await repository.get_by_id(
+    memory = await service.get_memory(
         restaurant_id=restaurant_id,
         memory_id=memory_id,
     )
@@ -142,5 +151,6 @@ async def delete_memory(
             detail="Restaurant memory not found",
         )
 
-    await repository.delete(memory)
+    await service.delete_memory(memory)
+
     await db.commit()

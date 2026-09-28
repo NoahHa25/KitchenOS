@@ -1,3 +1,4 @@
+from unittest.mock import AsyncMock , MagicMock
 from uuid import uuid4
 
 import pytest
@@ -156,3 +157,35 @@ async def test_service_deletes_memory(db_session):
     )
 
     assert found is None
+    
+    
+    
+@pytest.mark.asyncio
+async def test_service_records_memory():
+    repository = AsyncMock()
+    service = RestaurantMemoryService(repository)
+
+    expected_memory = MagicMock()
+    restaurant_id = uuid4()
+
+    repository.create.return_value = expected_memory
+
+    result = await service.record_memory(
+        restaurant_id=restaurant_id,
+        memory_type="supplier",
+        title="Supplier delivered late",
+        description="Vegetable delivery arrived two hours late.",
+        importance="medium",
+        tags="supplier,delivery,late",
+    )
+
+    assert result is expected_memory
+
+    repository.create.assert_awaited_once_with(
+        restaurant_id=restaurant_id,
+        memory_type="supplier",
+        title="Supplier delivered late",
+        description="Vegetable delivery arrived two hours late.",
+        importance="medium",
+        tags="supplier,delivery,late",
+    )
