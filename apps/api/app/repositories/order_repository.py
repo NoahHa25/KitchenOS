@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -128,3 +129,24 @@ class OrderRepository:
     )
 
        return result.scalar_one_or_none()
+    async def get_completed_orders_since(
+        self,
+        restaurant_id: UUID,
+        since: datetime,
+    ) -> list[Order]:
+        result = await self.db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.items),
+            )
+            .where(
+                Order.restaurant_id == restaurant_id,
+                Order.status == "completed",
+                Order.created_at >= since,
+            )
+            .order_by(
+                Order.created_at.desc(),
+            )
+        )
+
+        return list(result.scalars().all())
