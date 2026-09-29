@@ -19,6 +19,8 @@ from app.services.restaurant_brain_service import (
     RestaurantBrainService,
 )
 
+from app.repositories.restaurant_memory import RestaurantMemoryRepository
+
 
 @pytest.mark.anyio
 async def test_detect_repeated_waste_from_real_inventory_movements(
@@ -45,11 +47,13 @@ async def test_detect_repeated_waste_from_real_inventory_movements(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -115,13 +119,17 @@ async def test_repeated_waste_below_threshold_creates_no_insight(
     db_session.add(ingredient)
     await db_session.flush()
 
+
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
+    
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
         brain_service=brain_service,
+        memory_repository=memory_repository,
     )
 
     for _ in range(2):
@@ -167,11 +175,13 @@ async def test_waste_outside_lookback_window_is_ignored(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -224,11 +234,13 @@ async def test_other_movement_types_are_ignored(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -284,11 +296,13 @@ async def test_multiple_ingredients_generate_separate_insights(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -349,11 +363,13 @@ async def test_repeated_analysis_does_not_create_duplicate_insights(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -430,11 +446,13 @@ async def test_analysis_is_isolated_between_restaurants(
     await db_session.flush()
 
     inventory_repository = InventoryMovementRepository(db_session)
+    memory_repository = RestaurantMemoryRepository(db_session)
     insight_repository = RestaurantInsightRepository(db_session)
     brain_service = RestaurantBrainService(insight_repository)
 
     analysis_service = RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 

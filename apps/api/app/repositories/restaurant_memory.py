@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import List
 from uuid import UUID
 
 from sqlalchemy import select
@@ -54,10 +56,27 @@ class RestaurantMemoryRepository:
         self,
         *,
         restaurant_id: UUID,
-    ) -> list[RestaurantMemory]:
+    ) -> List[RestaurantMemory]:
         result = await self.db.execute(
             select(RestaurantMemory)
             .where(RestaurantMemory.restaurant_id == restaurant_id)
+            .order_by(RestaurantMemory.created_at.desc())
+        )
+
+        return list(result.scalars().all())
+
+    async def list_recent(
+        self,
+        *,
+        restaurant_id: UUID,
+        created_after: datetime,
+    ) -> List[RestaurantMemory]:
+        result = await self.db.execute(
+            select(RestaurantMemory)
+            .where(
+                RestaurantMemory.restaurant_id == restaurant_id,
+                RestaurantMemory.created_at >= created_after,
+            )
             .order_by(RestaurantMemory.created_at.desc())
         )
 
@@ -96,3 +115,4 @@ class RestaurantMemoryRepository:
     async def delete(self, memory: RestaurantMemory) -> None:
         await self.db.delete(memory)
         await self.db.flush()
+

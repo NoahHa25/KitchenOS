@@ -15,6 +15,8 @@ from app.services.restaurant_brain_analysis_service import (
     RestaurantBrainAnalysisService,
 )
 from app.services.restaurant_brain_service import RestaurantBrainService
+from app.repositories.restaurant_memory import RestaurantMemoryRepository
+
 
 
 router = APIRouter(
@@ -28,10 +30,12 @@ def get_brain_analysis_service(
 ) -> RestaurantBrainAnalysisService:
     inventory_repository = InventoryMovementRepository(db)
     insight_repository = RestaurantInsightRepository(db)
+    memory_repository = RestaurantMemoryRepository(db)
     brain_service = RestaurantBrainService(insight_repository)
 
     return RestaurantBrainAnalysisService(
         inventory_repository=inventory_repository,
+        memory_repository=memory_repository,
         brain_service=brain_service,
     )
 
@@ -47,8 +51,16 @@ async def analyze_restaurant(
         get_brain_analysis_service,
     ),
 ):
-    return await service.detect_repeated_waste(
+    waste_insights = await service.detect_repeated_waste(
         restaurant_id=restaurant_id,
         lookback_days=30,
         threshold=3,
     )
+
+    memory_insights = await service.detect_repeated_memory_problems(
+        restaurant_id=restaurant_id,
+        lookback_days=30,
+        threshold=3,
+    )
+    
+    return waste_insights + memory_insights

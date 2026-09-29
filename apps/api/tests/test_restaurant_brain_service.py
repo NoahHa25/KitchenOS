@@ -13,6 +13,7 @@ from app.schemas.restaurant_insight import (
 from app.services.restaurant_brain_service import (
     RestaurantBrainService,
 )
+from app.repositories.restaurant_memory import RestaurantMemoryRepository
 
 
 @pytest.mark.anyio
